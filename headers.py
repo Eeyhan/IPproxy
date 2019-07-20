@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
-# @Author  : geek_yang
+# @Author  : Eeyhan
 # @File    : my_headers.py
 
 import random

@@ -1,13 +1,14 @@
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
-# @Author  : geek_yang
+# @Author  : Eeyhan
 # @File    : proxy.py
 
 
 import gevent
 from gevent import monkey
 
-# monkey.patch_all()  # 如果是开启进程池需要把这个注释掉
+monkey.patch_all()  # 如果是开启进程池需要把这个注释掉
+import abc
 import asyncio
 import requests
 from lxml import etree
@@ -16,6 +17,7 @@ import random
 from functools import reduce
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 import time
+from multiprocessing import Pool
 from config import TEST_PROXY_URLS, PROXY_URLS, USER_AGENT
 import selectors
 
@@ -26,7 +28,7 @@ import selectors
 # print(q.get())
 
 
-class IPproxy(object):
+class BaseProxy(object):
     """获取代理IP"""
 
     def __init__(self):
@@ -40,8 +42,10 @@ class IPproxy(object):
         self.proxy_dict = {}
         self.user_agent = USER_AGENT
         self.header = self.get_header
-        self.proxy_urls = self.get_proxy_site
         self.test_proxy_urls = TEST_PROXY_URLS
+
+        # 节省创建对象的资源
+        self.proxy_urls = self.get_proxy_site
 
     def request_user_agent(self):
         """
@@ -109,6 +113,43 @@ class IPproxy(object):
     #     html = res.content.decode(html_charset)
     #     return html
 
+    # def request_common_url(self, url, url_name=None, proxy=False):
+    #     """
+    #     访问网站的通用方法
+    #     :param url: 网站链接
+    #     :param url_name: 请求代理网站时的别名，如果是测试代理不传入该值
+    #     :param proxy: 代理参数
+    #     :return:
+    #     """
+    #     html = None
+    #     res = None
+    #     try:
+    #         if not proxy:
+    #             res = requests.get(url, headers=self.header)
+    #         else:
+    #             res = requests.get(url, headers=self.header, proxies=proxy)
+    #     except Exception as e:
+    #         print(e)
+    #
+    #     # 根据获取到的编码方式解码
+    #     if not res:
+    #         return
+    #     if res.status_code == 200:
+    #         # print(res.text)
+    #         # print(requests.utils.get_encodings_from_content(res.text))
+    #         # # html_charset = requests.utils.get_encodings_from_content(res.text)[0].lower()
+    #         # # html = res.content.decode(html_charset)
+    #         try:
+    #             html = res.content.decode('utf-8')
+    #         except Exception as e:
+    #             print(e)
+    #             html = res.content.decode('gb2312')
+    #
+    #         if url_name:
+    #             self.parser(html, url_name)
+    #         else:
+    #             return res, html
+
     def request_common_url(self, url, url_name=None, proxy=False):
         """
         访问网站的通用方法
@@ -117,7 +158,6 @@ class IPproxy(object):
         :param proxy: 代理参数
         :return:
         """
-        html = None
         res = None
         try:
             if not proxy:
@@ -126,54 +166,67 @@ class IPproxy(object):
                 res = requests.get(url, headers=self.header, proxies=proxy)
         except Exception as e:
             print(e)
-
         # 根据获取到的编码方式解码
         if not res:
             return
         if res.status_code == 200:
-            # print(res.text)
-            # print(requests.utils.get_encodings_from_content(res.text))
-            # # html_charset = requests.utils.get_encodings_from_content(res.text)[0].lower()
-            # # html = res.content.decode(html_charset)
             try:
                 html = res.content.decode('utf-8')
             except Exception as e:
                 print(e)
                 html = res.content.decode('gb2312')
-
             if url_name:
                 self.parser(html, url_name)
             else:
+                print(html)
+                self.get_testing_response(res, html)
                 return res, html
 
-    def request_site(self):
+    def get_testing_response(self, res, html):
         """
-        获取代理网站的源码数据
+        获取测试IP的网站的结果
+        :param res: 请求对象
+        :param html: 源文件
         :return:
         """
-        # html = self.request_url()
-        # self.parser(html)
+        print(html)
 
-        # 使用gevent协程
-        task = []
-        for item in self.proxy_urls:
-            url = item.get('url')
-            url_name = item.get('type')
-            task.append(gevent.spawn(self.request_common_url, url, url_name, False))
-        gevent.joinall(task)
+    # def request_site(self):
+    #     """
+    #     获取代理网站的源码数据
+    #     :return:
+    #     """
+    #     # html = self.request_url()
+    #     # self.parser(html)
+    #
+    #     # 使用gevent协程
+    #     task = []
+    #     for item in self.proxy_urls:
+    #         url = item.get('url')
+    #         url_name = item.get('type')
+    #         task.append(gevent.spawn(self.request_common_url, url, url_name, False))
+    #     gevent.joinall(task)
 
-    def request_site_single(self, proxy_urls):
+    # def request_site_single(self, proxy_urls):
+    #     """
+    #     获取代理网站的源码数据,单个url的方式
+    #     :param proxy_urls: 代理网站
+    #     :return:
+    #     """
+    #     # html = self.request_url()
+    #     # self.parser(html)
+    #
+    #     url = proxy_urls.get('url')
+    #     url_name = proxy_urls.get('type')
+    #     self.request_common_url(url, url_name, False)
+
+    @abc.abstractmethod
+    def request_site(self, proxy_urls):
         """
-        获取代理网站的源码数据,单个url的方式
-        :param proxy_urls: 代理网站
+        获取网站
         :return:
         """
-        # html = self.request_url()
-        # self.parser(html)
-
-        url = proxy_urls.get('url')
-        url_name = proxy_urls.get('type')
-        self.request_common_url(url, url_name, False)
+        pass
 
     def parser(self, html, url_name):
         """
@@ -544,26 +597,37 @@ class IPproxy(object):
         # print(self.proxy_list, len(self.proxy_list))
         return self.proxy_list
 
+    # def get_test_proxy(self, proxy=None):
+    #     """
+    #     测试代理是否成功
+    #     :param proxy: 代理
+    #     :return: 成功返回True,失败范围False
+    #     """
+    #     url = 'http://httpbin.org/ip'
+    #
+    #     # 表示测试爬取的所有结果
+    #     if not proxy:
+    #         pass
+    #
+    #     testing_proxy = []  # 待测试的代理
+    #     tested_proxy = []  # 已测试的代理
+    #     for item in self.proxy_list:
+    #         if 'qq代理' not in item.keys():
+    #             testing_proxy.append(item)
+    #
+    #         # res, html = self.request_common_url(url=url, proxy=item)
+    #         # if res
+    #         # print(html)
+    #         # html
+
+    @abc.abstractmethod
     def get_test_proxy(self, proxy=None):
         """
         测试代理是否成功
         :param proxy: 代理
         :return: 成功返回True,失败范围False
         """
-        url = 'http://httpbin.org/ip'
-        # 表示测试爬取的所有结果
-        if not proxy:
-            pass
-
-        testing_proxy = []
-        for item in self.proxy_list:
-            if 'qq代理' not in item.keys():
-                testing_proxy.append(item)
-
-            # res, html = self.request_common_url(url=url, proxy=item)
-            # if res
-            # print(html)
-            # html
+        pass
 
     def proxy_duplicate_removal(self):
         """
@@ -580,16 +644,14 @@ class IPproxy(object):
         :param url: 代理网站
         :return:
         """
-        if not url:
-            self.request_site()
-        else:
-            self.request_site_single(proxy_urls=url)
+        self.request_site(proxy_urls=url)
+
+        # 测试代理，清洗数据
+        print('...')
         self.get_test_proxy()
-        # print(len(self.proxy_list))
+        print('...')
         # 去重
         self.proxy_list = self.proxy_duplicate_removal()
-
-        # print(len(self.proxy_list))
         print('已爬取代理 %s 个' % len(self.proxy_list))
         return self.proxy_list
 
@@ -599,8 +661,104 @@ class IPproxy(object):
         入口方法，返回代理列表
         :return:
         """
+
         result = self.get_proxy()
         return result
+
+    def testing_httpbin(self, html, proxy):
+        current_ip = html.get('origin')
+        if list(proxy.values())[0] in current_ip:
+            return True
+        return
+
+    def testing_chinaz(self, html, proxy):
+        pass
+
+    def testing_ipip(self, html, proxy):
+        pass
+
+    def testing_ipcn(self, html, proxy):
+        pass
+
+    def testing_ip138(self, html, proxy):
+        pass
+
+    def testing_tool_ip(self, html, proxy):
+        pass
+
+    def testing_sohu(self, html, proxy):
+        pass
+
+    def testing_online_service(self, html, proxy):
+        pass
+
+
+class NormalProxy(BaseProxy):
+
+    def request_site(self, proxy_urls):
+        """
+        获取代理网站的源码数据
+        :return:
+        """
+        task = []
+        for item in self.proxy_urls:
+            url = item.get('url')
+            url_name = item.get('type')
+            task.append(gevent.spawn(self.request_common_url, url, url_name, False))
+        gevent.joinall(task)
+
+    def get_test_proxy(self, proxy=None):
+        """
+        测试代理是否成功
+        :param proxy: 代理
+        :return: 成功返回True,失败范围False
+        """
+        # url = 'http://httpbin.org/ip'
+        url = 'https://www.ipip.net/ip.html'
+        # 表示测试爬取的所有结果
+        # 待测试的代理
+        testing_proxy = []
+        tested_proxy = []  # 已测试的代理
+        for item in self.proxy_list:
+            if 'qq代理' not in item.keys():
+                testing_proxy.append(item)
+            else:
+                tested_proxy.append(item)
+        tasks = []
+        for proxy in testing_proxy:
+            tasks.append(gevent.spawn(self.request_common_url, url, None, proxy))
+        gevent.joinall(tasks)
+
+
+class ThreadProxy(BaseProxy):
+
+    def request_site(self, proxy_urls):
+        """
+        获取代理网站的源码数据,单个url的方式
+        :return:
+        """
+        url = proxy_urls.get('url')
+        url_name = proxy_urls.get('type')
+        self.request_common_url(url, url_name, False)
+
+    def get_test_proxy(self, proxy=None):
+        """
+        测试代理是否成功
+        :param proxy: 代理
+        :return: 成功返回True,失败范围False
+        """
+        # url = 'http://httpbin.org/ip'
+        url = 'https://www.ipip.net/ip.html'
+
+        testing_proxy = []  # 待测试的代理
+        tested_proxy = []  # 已测试的代理
+        for item in self.proxy_list:
+            if 'qq代理' not in item.keys():
+                testing_proxy.append(item)
+            else:
+                tested_proxy.append(item)
+
+        self.request_common_url(url, None, proxy)
 
 
 def proxy_duplicate_removal(lists):
@@ -614,33 +772,31 @@ def proxy_duplicate_removal(lists):
 
 def main_gevent():
     # 利用协程一般保持在13秒，记得monkey打补丁
-    res = IPproxy()
+    res = NormalProxy()
     print(len(res.proxy))
-    return res.proxy
+    proxy_list = res.proxy
+    proxy_list = proxy_duplicate_removal(proxy_list)
+    return proxy_list
 
 
 def main_thread_pool():
     # 利用协程一般保持在8-13秒
-    res = IPproxy()
+    res = ThreadProxy()
     thread = ThreadPoolExecutor()
     tasks = [thread.submit(res.get_proxy, url) for url in PROXY_URLS]
     thread.shutdown()
-
     temp_data = [obj.result() for obj in as_completed(tasks)]
-    # print(data[0])
     data = []
     for item in temp_data:
         data.extend(item)
-
     proxy_list = proxy_duplicate_removal(data)
-
     print(proxy_list)
     print(len(proxy_list))
     return proxy_list
 
 
 def main_process_pool():
-    res = IPproxy()
+    res = ThreadProxy()
     tasks = []
     process = ProcessPoolExecutor(max_workers=3)
     for url in PROXY_URLS:
@@ -653,14 +809,10 @@ def main_process_pool():
 
 
 def main_thread_pool_asynicio():
-    # 一般在6-8秒，记得monkey打补丁
-    res = IPproxy()
+    res = ThreadProxy()
     loop = asyncio.get_event_loop()
     thread = ThreadPoolExecutor()
-    tasks = []
-    for url in PROXY_URLS:
-        obj = loop.run_in_executor(thread, res.get_proxy, url)
-        tasks.append(obj)
+    tasks = [loop.run_in_executor(thread, res.get_proxy, url) for url in PROXY_URLS]
     loop.run_until_complete(asyncio.wait(tasks))
     proxy_list = []
     for obj in tasks:
@@ -675,7 +827,7 @@ def main_thread_pool_asynicio():
 if __name__ == '__main__':
     start = time.time()
     # 第一版，使用协程
-    # main_gevent()
+    main_gevent()
 
     # 第二版，使用线程池
     # main_thread_pool()
@@ -683,5 +835,4 @@ if __name__ == '__main__':
     # 第三版，使用线程池+异步io
     # main_thread_pool_asynicio()
 
-    # 第四版，多进程+asynic
     print(time.time() - start)

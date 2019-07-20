@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
-# @Author  : geek_yang
+# @Author  : Eeyhan
 # @File    : config.py
 
 """
@@ -39,33 +39,33 @@ USER_AGENT = [
 
 PROXY_URLS = [
     {'url': 'https://www.xicidaili.com/nn', 'type': 'xici'},
-    {'url': 'https://www.xicidaili.com/nt', 'type': 'xici'},
-    {'url': 'https://www.xicidaili.com/wn', 'type': 'xici'},
-    {'url': 'https://www.xicidaili.com/wt', 'type': 'xici'},
-    {'url': 'https://www.xicidaili.com/qq', 'type': 'xici'},
-    {'url': 'http://www.xiladaili.com/gaoni/', 'type': 'xila'},
-    {'url': 'http://www.xiladaili.com/http/', 'type': 'xila'},
-    {'url': 'http://www.xiladaili.com/https/', 'type': 'xila'},
-    {'url': 'http://www.xiladaili.com/putong/', 'type': 'xila'},
-    {'url': 'https://www.kuaidaili.com/free/', 'type': 'kuaidaili'},
-    {'url': 'https://www.kuaidaili.com/ops/', 'type': 'kuaidaili_new'},
-    {'url': 'http://www.89ip.cn/', 'type': '89ip'},
-    {'url': 'http://www.qydaili.com/free/', 'type': 'qydaili'},
-    {'url': 'https://ip.ihuan.me/', 'type': 'ihuan'},
-    {'url': 'http://www.ip3366.net/', 'type': '3366'},
-    {'url': 'http://www.iphai.com/free/ng', 'type': 'iphai'},
-    {'url': 'http://www.iphai.com/free/wg', 'type': 'iphai'},
-    {'url': 'http://www.iphai.com/free/wp', 'type': 'iphai'},
-    {'url': 'http://www.goubanjia.com/', 'type': 'goubanjia'},
-    {'url': 'http://www.feiyiproxy.com/?page_id=1457', 'type': 'feiyi'},
-    {'url': 'http://www.shenjidaili.com/open/', 'type': 'shenji'},
-    {'url': 'http://ip.kxdaili.com/dailiip.html', 'type': 'kaixin'},
-    {'url': 'http://www.superfastip.com/welcome/freeIP', 'type': 'jisu'},
-    {'url': 'http://ip.jiangxianli.com/', 'type': 'jxl'},
-    {'url': 'https://lab.crossincode.com/proxy/', 'type': 'cross'},
-    {'url': 'http://www.nimadaili.com/gaoni/', 'type': 'nima'},
-    {'url': 'http://www.nimadaili.com/http/', 'type': 'nima'},
-    {'url': 'http://www.nimadaili.com/https/', 'type': 'nima'},
+    # {'url': 'https://www.xicidaili.com/nt', 'type': 'xici'},
+    # {'url': 'https://www.xicidaili.com/wn', 'type': 'xici'},
+    # {'url': 'https://www.xicidaili.com/wt', 'type': 'xici'},
+    # {'url': 'https://www.xicidaili.com/qq', 'type': 'xici'},
+    # {'url': 'http://www.xiladaili.com/gaoni/', 'type': 'xila'},
+    # {'url': 'http://www.xiladaili.com/http/', 'type': 'xila'},
+    # {'url': 'http://www.xiladaili.com/https/', 'type': 'xila'},
+    # {'url': 'http://www.xiladaili.com/putong/', 'type': 'xila'},
+    # {'url': 'https://www.kuaidaili.com/free/', 'type': 'kuaidaili'},
+    # {'url': 'https://www.kuaidaili.com/ops/', 'type': 'kuaidaili_new'},
+    # {'url': 'http://www.89ip.cn/', 'type': '89ip'},
+    # {'url': 'http://www.qydaili.com/free/', 'type': 'qydaili'},
+    # {'url': 'https://ip.ihuan.me/', 'type': 'ihuan'},
+    # {'url': 'http://www.ip3366.net/', 'type': '3366'},
+    # {'url': 'http://www.iphai.com/free/ng', 'type': 'iphai'},
+    # {'url': 'http://www.iphai.com/free/wg', 'type': 'iphai'},
+    # {'url': 'http://www.iphai.com/free/wp', 'type': 'iphai'},
+    # {'url': 'http://www.goubanjia.com/', 'type': 'goubanjia'},
+    # {'url': 'http://www.feiyiproxy.com/?page_id=1457', 'type': 'feiyi'},
+    # {'url': 'http://www.shenjidaili.com/open/', 'type': 'shenji'},
+    # {'url': 'http://ip.kxdaili.com/dailiip.html', 'type': 'kaixin'},
+    # {'url': 'http://www.superfastip.com/welcome/freeIP', 'type': 'jisu'},
+    # {'url': 'http://ip.jiangxianli.com/', 'type': 'jxl'},
+    # {'url': 'https://lab.crossincode.com/proxy/', 'type': 'cross'},
+    # {'url': 'http://www.nimadaili.com/gaoni/', 'type': 'nima'},
+    # {'url': 'http://www.nimadaili.com/http/', 'type': 'nima'},
+    # {'url': 'http://www.nimadaili.com/https/', 'type': 'nima'},
     # {'url': 'http://www.data5u.com/', 'type': 'da5u'},    # 待解析
     # {'url': 'http://www.66ip.cn/index.html', 'type': '66ip'}, # 需要js解密，后续补充
     # {'url': 'http://www.xsdaili.com/', 'type': 'xsdaili'}, # 需要爬取二级网页，后续补充
@@ -80,4 +80,10 @@ TEST_PROXY_URLS = [
     'https://www.ipip.net/ip.html',
     'http://httpbin.org/ip',
     'http://ip.chinaz.com/',
+    'https://ip.cn/',
+    'http://www.ip138.com/',
+    'https://tool.lu/ip/',
+    'http://pv.sohu.com/cityjson',
+    'http://api.online-service.vip/ip/me',
+
 ]
