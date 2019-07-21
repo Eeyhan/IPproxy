@@ -38,13 +38,12 @@ USER_AGENT = [
 """
 
 PROXY_URLS = [
-    {'url': 'https://www.xicidaili.com/nn', 'type': 'xici'},
+    # {'url': 'https://www.xicidaili.com/nn', 'type': 'xici'},
     # {'url': 'https://www.xicidaili.com/nt', 'type': 'xici'},
     # {'url': 'https://www.xicidaili.com/wn', 'type': 'xici'},
     # {'url': 'https://www.xicidaili.com/wt', 'type': 'xici'},
-    # {'url': 'https://www.xicidaili.com/qq', 'type': 'xici'},
     # {'url': 'http://www.xiladaili.com/gaoni/', 'type': 'xila'},
-    # {'url': 'http://www.xiladaili.com/http/', 'type': 'xila'},
+    {'url': 'http://www.xiladaili.com/http/', 'type': 'xila'},
     # {'url': 'http://www.xiladaili.com/https/', 'type': 'xila'},
     # {'url': 'http://www.xiladaili.com/putong/', 'type': 'xila'},
     # {'url': 'https://www.kuaidaili.com/free/', 'type': 'kuaidaili'},
@@ -66,6 +65,7 @@ PROXY_URLS = [
     # {'url': 'http://www.nimadaili.com/gaoni/', 'type': 'nima'},
     # {'url': 'http://www.nimadaili.com/http/', 'type': 'nima'},
     # {'url': 'http://www.nimadaili.com/https/', 'type': 'nima'},
+    # {'url': 'https://www.xicidaili.com/qq', 'type': 'xici'}, # qq代理，一般不咋用
     # {'url': 'http://www.data5u.com/', 'type': 'da5u'},    # 待解析
     # {'url': 'http://www.66ip.cn/index.html', 'type': '66ip'}, # 需要js解密，后续补充
     # {'url': 'http://www.xsdaili.com/', 'type': 'xsdaili'}, # 需要爬取二级网页，后续补充
@@ -77,13 +77,14 @@ PROXY_URLS = [
 自添加PROXY_URLS请按照已有数据的格式来添加
 """
 TEST_PROXY_URLS = [
-    'https://www.ipip.net/ip.html',
-    'http://httpbin.org/ip',
-    'http://ip.chinaz.com/',
-    'https://ip.cn/',
-    'http://www.ip138.com/',
-    'https://tool.lu/ip/',
-    'http://pv.sohu.com/cityjson',
-    'http://api.online-service.vip/ip/me',
+    {'url': 'https://www.ipip.net/ip.html', 'type': 'ipip'},
+    # {'url': 'http://httpbin.org/ip', 'type': 'httpbin'},
+    # {'url': 'http://ip.chinaz.com/', 'type': 'chinaz'},
+    # {'url': 'https://ip.cn/', 'type': 'ipcn'},
+    # {'url': 'https://tool.lu/ip/', 'type': 'luip'},
+    # {'url': 'http://pv.sohu.com/cityjson', 'type': 'sohu'},
+    # {'url': 'http://api.online-service.vip/ip/me', 'type': 'onlineservice'},
+    # {'url': 'https://ip.ttt.sh/', 'type': 'ttt'},
+    # {'url': 'http://ip.taobao.com/ipSearch.html', 'type': 'taobao'},
 
 ]

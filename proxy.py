@@ -9,6 +9,8 @@ from gevent import monkey
 
 monkey.patch_all()  # 如果是开启进程池需要把这个注释掉
 import abc
+import json
+import re
 import asyncio
 import requests
 from lxml import etree
@@ -19,24 +21,12 @@ from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_compl
 import time
 from multiprocessing import Pool
 from config import TEST_PROXY_URLS, PROXY_URLS, USER_AGENT
-import selectors
-
-
-# q = Queue()
-# for item in PROXY_URLS:
-#     q.put(item)
-# print(q.get())
 
 
 class BaseProxy(object):
     """获取代理IP"""
 
     def __init__(self):
-        """
-        :param url: ip代理网站的url路径
-        :param url_name: ip代理网站名
-        """
-
         self.header = None
         self.proxy_list = []
         self.proxy_dict = {}
@@ -97,59 +87,6 @@ class BaseProxy(object):
         }
         return headers
 
-    # def request_url(self, url, proxy=False):
-    #     """
-    #     访问网站的通用方法
-    #     :param url: 网站链接
-    #     :param proxy: 代理参数
-    #     :return:
-    #     """
-    #     if not proxy:
-    #         res = requests.get(url, headers=self.header)
-    #     else:
-    #         res = requests.get(url, headers=self.header, proxies=proxy)
-    #     # 根据获取到的编码方式解码
-    #     html_charset = requests.utils.get_encodings_from_content(res.text)[0].lower()
-    #     html = res.content.decode(html_charset)
-    #     return html
-
-    # def request_common_url(self, url, url_name=None, proxy=False):
-    #     """
-    #     访问网站的通用方法
-    #     :param url: 网站链接
-    #     :param url_name: 请求代理网站时的别名，如果是测试代理不传入该值
-    #     :param proxy: 代理参数
-    #     :return:
-    #     """
-    #     html = None
-    #     res = None
-    #     try:
-    #         if not proxy:
-    #             res = requests.get(url, headers=self.header)
-    #         else:
-    #             res = requests.get(url, headers=self.header, proxies=proxy)
-    #     except Exception as e:
-    #         print(e)
-    #
-    #     # 根据获取到的编码方式解码
-    #     if not res:
-    #         return
-    #     if res.status_code == 200:
-    #         # print(res.text)
-    #         # print(requests.utils.get_encodings_from_content(res.text))
-    #         # # html_charset = requests.utils.get_encodings_from_content(res.text)[0].lower()
-    #         # # html = res.content.decode(html_charset)
-    #         try:
-    #             html = res.content.decode('utf-8')
-    #         except Exception as e:
-    #             print(e)
-    #             html = res.content.decode('gb2312')
-    #
-    #         if url_name:
-    #             self.parser(html, url_name)
-    #         else:
-    #             return res, html
-
     def request_common_url(self, url, url_name=None, proxy=False):
         """
         访问网站的通用方法
@@ -158,75 +95,60 @@ class BaseProxy(object):
         :param proxy: 代理参数
         :return:
         """
+
+        headers = self.header
+        headers['Referer'] = url
+        headers['Host'] = url.split('/')[2]
+        headers['Connection'] = 'close'
         res = None
         try:
             if not proxy:
                 res = requests.get(url, headers=self.header)
             else:
-                res = requests.get(url, headers=self.header, proxies=proxy)
+                res = requests.get(url, headers=headers, proxies=proxy)
         except Exception as e:
             print(e)
         # 根据获取到的编码方式解码
-        if not res:
-            return
-        if res.status_code == 200:
-            try:
-                html = res.content.decode('utf-8')
-            except Exception as e:
-                print(e)
-                html = res.content.decode('gb2312')
-            if url_name:
-                self.parser(html, url_name)
-            else:
-                print(html)
-                self.get_testing_response(res, html)
-                return res, html
 
-    def get_testing_response(self, res, html):
+        if not res or res.status_code != 200:
+            raise Exception('网络请求超时或者请求被拒绝')
+        try:
+            html = res.content.decode('utf-8')
+        except Exception as e:
+            print(e)
+            html = res.content.decode('gb2312')
+        if url_name.startswith('parser'):
+            self.parser(html, url_name)
+        elif url_name.startswith('test'):
+            result = self.test_parser(html, url_name, proxy)
+            return result
+        else:
+            return
+
+    def compare_proxy(self, proxy, current_ip):
         """
-        获取测试IP的网站的结果
-        :param res: 请求对象
-        :param html: 源文件
+        拆分代理，只要ip:port
+        :param proxy:爬取的代理ip
+        :param current_ip: IP查询网站显示的ip
         :return:
         """
-        print(html)
 
-    # def request_site(self):
-    #     """
-    #     获取代理网站的源码数据
-    #     :return:
-    #     """
-    #     # html = self.request_url()
-    #     # self.parser(html)
-    #
-    #     # 使用gevent协程
-    #     task = []
-    #     for item in self.proxy_urls:
-    #         url = item.get('url')
-    #         url_name = item.get('type')
-    #         task.append(gevent.spawn(self.request_common_url, url, url_name, False))
-    #     gevent.joinall(task)
+        proxy_ip = list(proxy.values())[0].split('//')[1]
+        if current_ip in proxy_ip:  # current_ip:x.x.x.x proxy_ip:x.x.x.x:xx
+            return True
+        return
 
-    # def request_site_single(self, proxy_urls):
-    #     """
-    #     获取代理网站的源码数据,单个url的方式
-    #     :param proxy_urls: 代理网站
-    #     :return:
-    #     """
-    #     # html = self.request_url()
-    #     # self.parser(html)
-    #
-    #     url = proxy_urls.get('url')
-    #     url_name = proxy_urls.get('type')
-    #     self.request_common_url(url, url_name, False)
-
-    @abc.abstractmethod
     def request_site(self, proxy_urls):
         """
-        获取网站
+        获取代理网站的源码数据
         :return:
         """
-        pass
+        task = []
+        for item in self.proxy_urls:
+            url = item.get('url')
+            url_name = item.get('type')
+            task.append(gevent.spawn(self.request_common_url, url, url_name, False))
+        gevent.joinall(task)
 
     def parser(self, html, url_name):
         """
@@ -246,6 +168,12 @@ class BaseProxy(object):
             else:
                 html = etree.HTML(html)
                 func(html)
+
+    def test_parser(self, html, url_name, proxy):
+        func = getattr(self, url_name)
+        if func:
+            result = func(html, proxy)
+            return result
 
     def parser_xici(self, etree_html):
         """
@@ -597,37 +525,33 @@ class BaseProxy(object):
         # print(self.proxy_list, len(self.proxy_list))
         return self.proxy_list
 
-    # def get_test_proxy(self, proxy=None):
-    #     """
-    #     测试代理是否成功
-    #     :param proxy: 代理
-    #     :return: 成功返回True,失败范围False
-    #     """
-    #     url = 'http://httpbin.org/ip'
-    #
-    #     # 表示测试爬取的所有结果
-    #     if not proxy:
-    #         pass
-    #
-    #     testing_proxy = []  # 待测试的代理
-    #     tested_proxy = []  # 已测试的代理
-    #     for item in self.proxy_list:
-    #         if 'qq代理' not in item.keys():
-    #             testing_proxy.append(item)
-    #
-    #         # res, html = self.request_common_url(url=url, proxy=item)
-    #         # if res
-    #         # print(html)
-    #         # html
+    def choice_test_site(self, proxy):
+        test_url = random.choice(TEST_PROXY_URLS)
+        url = test_url.get('url')
+        url_name = 'test_' + test_url.get('type')
+        result = self.request_common_url(url, url_name, proxy)
+        return result
 
-    @abc.abstractmethod
     def get_test_proxy(self, proxy=None):
         """
         测试代理是否成功
-        :param proxy: 代理
+        :param proxy: 代理，如果为None则自动萱蕚
         :return: 成功返回True,失败范围False
         """
-        pass
+        if not proxy:
+            proxy = random.choice(self.proxy_list)
+
+        result = self.choice_test_site(proxy)
+        if result:
+            return result  # proxy
+
+        # 递归查找，直到有正常数据返回
+        self.get_test_proxy(proxy)
+
+    @property
+    def proxy(self):
+        result = self.get_test_proxy()
+        return result
 
     def proxy_duplicate_removal(self):
         """
@@ -645,89 +569,165 @@ class BaseProxy(object):
         :return:
         """
         self.request_site(proxy_urls=url)
-
-        # 测试代理，清洗数据
-        print('...')
-        self.get_test_proxy()
-        print('...')
         # 去重
         self.proxy_list = self.proxy_duplicate_removal()
+
         print('已爬取代理 %s 个' % len(self.proxy_list))
         return self.proxy_list
 
     @property
-    def proxy(self):
+    def proxys(self):
         """
-        入口方法，返回代理列表
+        入口方法，返回代理数组
         :return:
         """
-
         result = self.get_proxy()
         return result
 
-    def testing_httpbin(self, html, proxy):
+    def test_httpbin(self, html, proxy):
+        """
+        httpbin的IP查询
+        :param html: 源网站页面
+        :param proxy: 待测试的代理IP
+        :return:
+        """
+        html = json.loads(html)
         current_ip = html.get('origin')
-        if list(proxy.values())[0] in current_ip:
-            return True
-        return
+        result = self.compare_proxy(proxy, current_ip)
+        if result:
+            return proxy
 
-    def testing_chinaz(self, html, proxy):
-        pass
+    def test_chinaz(self, html, proxy):
+        """
+        chinaz的IP查询
+        :param html: 源网站页面
+        :param proxy: 待测试的代理IP
+        :return:
+        """
+        html = etree.HTML(html)
+        current_ip = html.xpath('//*[@id="rightinfo"]/dl/dd[1]/text()')[0]
+        result = self.compare_proxy(proxy, current_ip)
 
-    def testing_ipip(self, html, proxy):
-        pass
+        if result:
+            return proxy
 
-    def testing_ipcn(self, html, proxy):
-        pass
+    def test_ipip(self, html, proxy):
+        """
+        ipip的IP查询
+        :param html: 源网站页面
+        :param proxy: 待测试的代理IP
+        :return:
+        """
+        html = etree.HTML(html)
+        current_ip = html.xpath('//input/@value')[0]
+        result = self.compare_proxy(proxy, current_ip)
+        if result:
+            return proxy
 
-    def testing_ip138(self, html, proxy):
-        pass
+    def test_ipcn(self, html, proxy):
+        """
+        ipcn的IP查询
+        :param html: 源网站页面
+        :param proxy: 待测试的代理IP
+        :return:
+        """
+        html = etree.HTML(html)
+        current_ip = html.xpath('//div[@id="result"]/div/p[1]/code/text()')
+        print(current_ip)
+        time.sleep(10000)
+        result = self.compare_proxy(proxy, current_ip)
+        if result:
+            return proxy
 
-    def testing_tool_ip(self, html, proxy):
-        pass
+    def test_luip(self, html, proxy):
+        """
+        luip的IP查询
+        :param html: 源网站页面
+        :param proxy: 待测试的代理IP
+        :return:
+        """
+        html = etree.HTML(html)
+        current_ip = html.xpath('//*[@id="ipaddress"]/text()')[0]
+        print(current_ip)
+        time.sleep(1000)
 
-    def testing_sohu(self, html, proxy):
-        pass
 
-    def testing_online_service(self, html, proxy):
-        pass
+    def test_sohu(self, html, proxy):
+        """
+        搜狐网的IP查询
+        :param html: 源网站页面
+        :param proxy: 待测试的代理IP
+        :return:
+        """
+        html = html.split('=')[1].replace(';', '')
+        html = json.loads(html)
+        current_ip = html.get('cip')
+        result = self.compare_proxy(proxy, current_ip)
+        if result:
+            return proxy
+
+    def test_onlineservice(self, html, proxy):
+        """
+        onlineservice的IP查询
+        :param html: 该网站较特殊，此时的html就是返回IP
+        :param proxy: 待测试的代理IP
+        :return:
+        """
+        result = self.compare_proxy(proxy, html)
+        if result:
+            return proxy
+
+    def test_ttt(self, html, proxy):
+        """
+        ttt的IP查询
+        :param html: 源网站页面
+        :param proxy: 待测试的代理IP
+        :return:
+        """
+        html = etree.HTML(html)
+        current_ip = html.xpath('//*[@id="getip"]/text()')[0]
+        result = self.compare_proxy(proxy, current_ip)
+        if result:
+            return proxy
+
+    def test_taobao(self, html, proxy):
+        """
+        ttt的IP查询
+        :param html: 源网站页面
+        :param proxy: 待测试的代理IP
+        :return:
+        """
+        html = etree.HTML(html)
+        current_ip = html.xpath('//*[@id="obviousIp"]/text()')[0]
+        result = self.compare_proxy(proxy, current_ip)
+        if result:
+            return proxy
 
 
 class NormalProxy(BaseProxy):
+    # def get_test_proxy(self, proxy=None):
+    #     """
+    #     测试代理是否成功
+    #     :param proxy: 代理
+    #     :return: 成功返回True,失败范围False
+    #     """
+    #     # url = 'http://httpbin.org/ip'
+    #     url = 'https://www.ipip.net/ip.html'
+    #     # 表示测试爬取的所有结果
+    #     # 待测试的代理
+    #     testing_proxy = []
+    #     tested_proxy = []  # 已测试的代理
+    #     for item in self.proxy_list:
+    #         if 'qq代理' not in item.keys():
+    #             testing_proxy.append(item)
+    #         else:
+    #             tested_proxy.append(item)
+    #     tasks = []
+    #     for proxy in testing_proxy:
+    #         tasks.append(gevent.spawn(self.request_common_url, url, None, proxy))
+    #     gevent.joinall(tasks)
 
-    def request_site(self, proxy_urls):
-        """
-        获取代理网站的源码数据
-        :return:
-        """
-        task = []
-        for item in self.proxy_urls:
-            url = item.get('url')
-            url_name = item.get('type')
-            task.append(gevent.spawn(self.request_common_url, url, url_name, False))
-        gevent.joinall(task)
-
-    def get_test_proxy(self, proxy=None):
-        """
-        测试代理是否成功
-        :param proxy: 代理
-        :return: 成功返回True,失败范围False
-        """
-        # url = 'http://httpbin.org/ip'
-        url = 'https://www.ipip.net/ip.html'
-        # 表示测试爬取的所有结果
-        # 待测试的代理
-        testing_proxy = []
-        tested_proxy = []  # 已测试的代理
-        for item in self.proxy_list:
-            if 'qq代理' not in item.keys():
-                testing_proxy.append(item)
-            else:
-                tested_proxy.append(item)
-        tasks = []
-        for proxy in testing_proxy:
-            tasks.append(gevent.spawn(self.request_common_url, url, None, proxy))
-        gevent.joinall(tasks)
+    pass
 
 
 class ThreadProxy(BaseProxy):
@@ -740,25 +740,6 @@ class ThreadProxy(BaseProxy):
         url = proxy_urls.get('url')
         url_name = proxy_urls.get('type')
         self.request_common_url(url, url_name, False)
-
-    def get_test_proxy(self, proxy=None):
-        """
-        测试代理是否成功
-        :param proxy: 代理
-        :return: 成功返回True,失败范围False
-        """
-        # url = 'http://httpbin.org/ip'
-        url = 'https://www.ipip.net/ip.html'
-
-        testing_proxy = []  # 待测试的代理
-        tested_proxy = []  # 已测试的代理
-        for item in self.proxy_list:
-            if 'qq代理' not in item.keys():
-                testing_proxy.append(item)
-            else:
-                tested_proxy.append(item)
-
-        self.request_common_url(url, None, proxy)
 
 
 def proxy_duplicate_removal(lists):
@@ -773,10 +754,12 @@ def proxy_duplicate_removal(lists):
 def main_gevent():
     # 利用协程一般保持在13秒，记得monkey打补丁
     res = NormalProxy()
-    print(len(res.proxy))
-    proxy_list = res.proxy
+    print(len(res.proxys))
+    proxy_list = res.proxys
     proxy_list = proxy_duplicate_removal(proxy_list)
-    return proxy_list
+    # print(proxy_list)
+    available_proxy = res.proxy
+    return available_proxy
 
 
 def main_thread_pool():
