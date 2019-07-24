@@ -74,10 +74,20 @@ PROXY_URLS = [
 ]
 
 """
-自添加PROXY_URLS请按照已有数据的格式来添加
+自添加测试代理的url请按照已有数据的格式来添加
 """
+
 TEST_PROXY_URLS = [
-    {'url': 'https://www.ipip.net/ip.html', 'type': 'ipip'},
+
+    # 下面的是主流搜索引擎搜ip的网址，相对比较开放，而且查询结果比较准确
+    # {'url': 'https://www.baidu.com/s?wd=ip', 'type': 'baidu'},
+    {'url': 'https://www.sogou.com/web?query=ip', 'type': 'sogou'},
+    # {'url': 'https://www.so.com/s?q=ip&src=srp&fr=none&psid=2d511001ad6e91af893e0d7e561f1bba', 'type': 'so'},
+    # {'url': 'https://mijisou.com/?q=ip&category_general=on&time_range=&language=zh-CN&pageno=1', 'type': 'miji'},
+
+    # 下面的是专门查询本机公网ip的网址，请求不能过于频繁
+    # {'url': 'https://myip.ipip.net/', 'type': 'myip'},
+    # {'url': 'https://www.ipip.net/ip.html', 'type': 'ipip'},
     # {'url': 'http://httpbin.org/ip', 'type': 'httpbin'},
     # {'url': 'http://ip.chinaz.com/', 'type': 'chinaz'},
     # {'url': 'https://ip.cn/', 'type': 'ipcn'},
@@ -86,5 +96,5 @@ TEST_PROXY_URLS = [
     # {'url': 'http://api.online-service.vip/ip/me', 'type': 'onlineservice'},
     # {'url': 'https://ip.ttt.sh/', 'type': 'ttt'},
     # {'url': 'http://ip.taobao.com/ipSearch.html', 'type': 'taobao'},
-
+    # {'url': 'http://icanhazip.com/', 'type': 'ican'},
 ]

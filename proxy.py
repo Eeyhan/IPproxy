@@ -3,7 +3,6 @@
 # @Author  : Eeyhan
 # @File    : proxy.py
 
-
 import gevent
 from gevent import monkey
 
@@ -20,7 +19,9 @@ from functools import reduce
 from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
 import time
 from multiprocessing import Pool
-from config import TEST_PROXY_URLS, PROXY_URLS, USER_AGENT
+from config import PROXY_URLS, USER_AGENT, TEST_PROXY_URLS
+import redis
+from requests.exceptions import ConnectionError
 
 
 class BaseProxy(object):
@@ -28,16 +29,15 @@ class BaseProxy(object):
 
     def __init__(self):
         self.header = None
-        self.proxy_list = []
-        self.proxy_dict = {}
-        self.user_agent = USER_AGENT
-        self.header = self.get_header
-        self.test_proxy_urls = TEST_PROXY_URLS
+        self.proxy_list = []  # 代理IP列表
+        self.user_agent = USER_AGENT  # 请求的UA
+        self.header = self.get_header  # 请求头
 
         # 节省创建对象的资源
-        self.proxy_urls = self.get_proxy_site
+        self.test_proxy_urls = self.get_test_proxy_site  # 测试代理IP的网址
+        self.proxy_urls = self.get_proxy_site  # 免费代理网址
 
-    def request_user_agent(self):
+    def req_user_agent(self):
         """
         预留的钩子函数，返回的值可以由子类自定制
         :return: 返回user-agent
@@ -50,9 +50,9 @@ class BaseProxy(object):
         预留的钩子函数，返回的值可以由子类自定制
         :return:
         """
-        return self.request_proxy_urls()
+        return self.req_proxy_urls()
 
-    def request_proxy_urls(self):
+    def req_proxy_urls(self):
         """
         获取代理站点，重新拼接字段
         :return: 返回代理ip地址
@@ -65,11 +65,26 @@ class BaseProxy(object):
         self.proxy_urls = proxy_url_list
         return self.proxy_urls
 
-    def request_test_proxy_url(self):
+    @property
+    def get_test_proxy_site(self):
         """
         预留的钩子函数，返回的值可以由子类自定制
         :return:
         """
+
+        return self.req_test_proxy_urls(TEST_PROXY_URLS)
+
+    def req_test_proxy_urls(self, test_urls):
+        """
+        预留的钩子函数，返回的值可以由子类自定制
+        :param test_urls: 测试代理IP的url
+        :return:
+        """
+        test_proxy_urls = []
+        for item in test_urls:
+            item['type'] = 'test_' + item['type']
+            test_proxy_urls.append(item)
+        self.test_proxy_urls = test_proxy_urls
         return self.test_proxy_urls
 
     @property
@@ -77,17 +92,18 @@ class BaseProxy(object):
         """
         :return: 返回构造好的header头信息
         """
-        user_agent = self.request_user_agent()
+        user_agent = self.req_user_agent()
         headers = {
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
             'User-Agent': random.choice(user_agent),
             'Accept-Language': 'en-US,en;q=0.5',
             'Connection': 'keep-alive',
             'Accept-Encoding': 'gzip, deflate',
+            'Upgrade-Insecure-Requests': '1'
         }
         return headers
 
-    def request_common_url(self, url, url_name=None, proxy=False):
+    def request_common_url(self, url, url_name=None, proxy=None):
         """
         访问网站的通用方法
         :param url: 网站链接
@@ -95,35 +111,67 @@ class BaseProxy(object):
         :param proxy: 代理参数
         :return:
         """
-
-        headers = self.header
-        headers['Referer'] = url
-        headers['Host'] = url.split('/')[2]
-        headers['Connection'] = 'close'
         res = None
-        try:
-            if not proxy:
-                res = requests.get(url, headers=self.header)
-            else:
+        html = None
+        # 如果有代理
+        if proxy:
+            headers = self.header
+            headers['Referer'] = url
+            headers['Connection'] = 'close'
+            try:
                 res = requests.get(url, headers=headers, proxies=proxy)
-        except Exception as e:
-            print(e)
-        # 根据获取到的编码方式解码
+            except Exception as x:
+                print(x)
+            if not res or res.status_code != 200:
+                print('该代理 %s 不可用' % proxy)
+                return False
 
-        if not res or res.status_code != 200:
-            raise Exception('网络请求超时或者请求被拒绝')
-        try:
-            html = res.content.decode('utf-8')
-        except Exception as e:
-            print(e)
-            html = res.content.decode('gb2312')
-        if url_name.startswith('parser'):
-            self.parser(html, url_name)
-        elif url_name.startswith('test'):
-            result = self.test_parser(html, url_name, proxy)
-            return result
         else:
+            try:
+                res = requests.get(url, headers=self.header)
+            except Exception as e:
+                print(e)
+            if not res or res.status_code != 200:
+                raise ValueError('错误：网络请求超时，可能请求被拒绝')
+
+        if res:
+            try:
+                html = res.content.decode('utf-8')
+            except Exception as s:
+                print(s)
+                html = res.content.decode('gb2312')
+
+        if url_name:
+            # result = self.parser(html, url_name, proxy)
+            if url_name.startswith('parser'):
+                result = self.parser(html, url_name)
+            elif url_name.startswith('test'):
+                result = self.parser(html, url_name, proxy)
+            return result
+
+        elif not url_name:
+            return res, html
+        else:
+
             return
+
+        # if not res or res.status_code != 200:
+        #     raise Exception('错误：网络请求超时，可能请求被拒绝或者代理无效')
+        # try:
+        #     html = res.content.decode('utf-8')
+        # except Exception as e:
+        #     print(e)
+        #     html = res.content.decode('gb2312')
+        # if url_name:
+        #     if url_name.startswith('parser'):
+        #         self.parser(html, url_name)
+        #     elif url_name.startswith('test'):
+        #         result = self.test_parser(html, url_name, proxy)
+        #         return result
+        # elif not url_name:
+        #     return res, html
+        # else:
+        #     return
 
     def compare_proxy(self, proxy, current_ip):
         """
@@ -134,9 +182,13 @@ class BaseProxy(object):
         """
 
         proxy_ip = list(proxy.values())[0].split('//')[1]
+
         if current_ip in proxy_ip:  # current_ip:x.x.x.x proxy_ip:x.x.x.x:xx
             return True
-        return
+        else:
+            print('代理不成功。。。')
+            print('current', current_ip, type(current_ip))
+            print('proxy', proxy_ip, type(proxy_ip))
 
     def request_site(self, proxy_urls):
         """
@@ -147,33 +199,54 @@ class BaseProxy(object):
         for item in self.proxy_urls:
             url = item.get('url')
             url_name = item.get('type')
-            task.append(gevent.spawn(self.request_common_url, url, url_name, False))
+            task.append(gevent.spawn(self.request_common_url, url, url_name, None))
         gevent.joinall(task)
 
-    def parser(self, html, url_name):
+    def parser(self, html, url_name, proxy=None):
         """
-        分发解析器
+        测试代理的分发解析器
         :param html: 拿到的网站源码
         :param url_name: 请求的代理网站别名
+        :param proxy: 待测试的代理ip,如果为空则是爬取阶段，如果不为空则是测试代理阶段
         :return:
         """
         func = getattr(self, url_name)
         # 如果对象存在对应解析方法
         if func:
             # 如果是goubanjia，用BeautifulSoup解析
-            if url_name == 'parser_goubanjia':
-                html = BeautifulSoup(html, "lxml")
-                func(html)
-            # 其余用xpath解析
+            try:
+                if url_name == 'parser_goubanjia':
+                    html = BeautifulSoup(html, "lxml")
+                    result = func(html)
+                # 此类用字符串处理或者用正则匹配
+                elif url_name in ('test_sohu', 'test_onlineservice', 'test_ican', 'test_myip', 'test_httpbin'):
+                    result = func(html, proxy)
+                # 其余用xpath解析
+                else:
+                    html = etree.HTML(html)
+                    if not proxy:
+                        result = func(html)
+                    else:
+                        result = func(html, proxy)
+            except Exception as e:
+                print(e)
             else:
-                html = etree.HTML(html)
-                func(html)
+                return result
+        else:
+            raise ValueError('尚不存在该网站的解析方法，请根据配置文件添加对应解析方法')
 
-    def test_parser(self, html, url_name, proxy):
-        func = getattr(self, url_name)
-        if func:
-            result = func(html, proxy)
-            return result
+    # def test_parser(self, html, url_name, proxy):
+    #     """
+    #     测试代理的分发解析器
+    #     :param html: 拿到的网站源码
+    #     :param url_name: 请求的代理网站别名
+    #     :param proxy: 待测试的代理ip
+    #     :return:
+    #     """
+    #     func = getattr(self, url_name)
+    #     if func:
+    #         result = func(html, proxy)
+    #         return result
 
     def parser_xici(self, etree_html):
         """
@@ -214,7 +287,6 @@ class BaseProxy(object):
             ip_port = ip + ':' + port
             protocal = xpath_data[3].lower()
             self.proxy_list.append({protocal: protocal + '://' + ip_port})
-            # self.proxy_dict.update({protocal: protocal + '://' + ip_port})
         # print(self.proxy_list)
         return self.proxy_list
 
@@ -233,7 +305,6 @@ class BaseProxy(object):
             protocal = xpath_data[3]
             protocal = 'https' if 'HTTPS' in protocal else 'http'
             self.proxy_list.append({protocal: protocal + '://' + ip_port})
-            # self.proxy_dict.update({protocal: protocal + '://' + ip_port})
         # print(self.proxy_list)
         return self.proxy_list
 
@@ -250,7 +321,6 @@ class BaseProxy(object):
             port = xpath_data[1].replace('\n', '').replace('\t', '')
             ip_port = ip + port
             self.proxy_list.append({'http': 'http://' + ip_port})
-            # self.proxy_dict.update({'http': 'http://' + ip_port})
         # print(self.proxy_list)
         return self.proxy_list
 
@@ -268,7 +338,6 @@ class BaseProxy(object):
             ip_port = ip + ':' + port
             protocal = xpath_data[3].lower()
             self.proxy_list.append({protocal: protocal + '://' + ip_port})
-            # self.proxy_dict.update({protocal: protocal + '://' + ip_port})
         # print(self.proxy_list)
         return self.proxy_list
 
@@ -286,7 +355,6 @@ class BaseProxy(object):
             ip_port = ip + ':' + port
             protocal = xpath_data[3].lower()
             self.proxy_list.append({protocal: protocal + '://' + ip_port})
-            # self.proxy_dict.update({protocal: protocal + '://' + ip_port})
         # print(self.proxy_list)
         return self.proxy_list
 
@@ -312,7 +380,6 @@ class BaseProxy(object):
             protocal = xpath_data[1].lower()
             protocal = 'https' if 'https' in protocal else 'http'
             self.proxy_list.append({protocal: protocal + '://' + ip_port})
-            # self.proxy_dict.update({protocal: protocal + '://' + ip_port})
         # print(self.proxy_list)
         return self.proxy_list
 
@@ -327,7 +394,6 @@ class BaseProxy(object):
             protocal = xpath_data[3].strip().lower()
             protocal = 'https' if 'https' in protocal else 'http'
             self.proxy_list.append({protocal: protocal + '://' + ip_port})
-            # self.proxy_dict.update({protocal: protocal + '://' + ip_port})
         # print(self.proxy_list)
         return self.proxy_list
 
@@ -385,7 +451,6 @@ class BaseProxy(object):
         data = zip(prototal_list, temp_list)
         for item in data:
             self.proxy_list.append({item[0]: item[0] + '://' + item[1]})
-            # self.proxy_dict.update({item[0]: item[0] + '://' + item[1]})
         # print(proxy_list)
         return self.proxy_list
 
@@ -401,7 +466,6 @@ class BaseProxy(object):
             ip_port = xpath_data[0] + ':' + xpath_data[1]
             protocal = xpath_data[3].lower()
             self.proxy_list.append({protocal: protocal + '://' + ip_port})
-            # self.proxy_dict.update({protocal: protocal + '://' + ip_port})
         # print(self.proxy_list)
         return self.proxy_list
 
@@ -417,7 +481,6 @@ class BaseProxy(object):
             ip_port = xpath_data[0]
             protocal = xpath_data[3].lower()
             self.proxy_list.append({protocal: protocal + '://' + ip_port})
-            # self.proxy_dict.update({protocal: protocal + '://' + ip_port})
         # print(self.proxy_list, len(self.proxy_list))
         return self.proxy_list
 
@@ -452,7 +515,6 @@ class BaseProxy(object):
             protocal = xpath_data[3].lower()
             protocal = 'https' if 'https' in protocal else 'http'
             self.proxy_list.append({protocal: protocal + '://' + ip_port})
-            # self.proxy_dict.update({protocal: protocal + '://' + ip_port})
         # print(self.proxy_list, len(self.proxy_list))
         return self.proxy_list
 
@@ -468,7 +530,6 @@ class BaseProxy(object):
             ip_port = xpath_data[0] + ':' + xpath_data[1]
             protocal = xpath_data[3].lower()
             self.proxy_list.append({protocal: protocal + '://' + ip_port})
-            # self.proxy_dict.update({protocal: protocal + '://' + ip_port})
         # print(self.proxy_list, len(self.proxy_list))
         return self.proxy_list
 
@@ -485,7 +546,6 @@ class BaseProxy(object):
             ip_port = xpath_data[1] + ':' + xpath_data[2]
             protocal = xpath_data[4].lower()
             self.proxy_list.append({protocal: protocal + '://' + ip_port})
-            # self.proxy_dict.update({protocal: protocal + '://' + ip_port})
         # print(self.proxy_list, len(self.proxy_list))
         return self.proxy_list
 
@@ -503,7 +563,6 @@ class BaseProxy(object):
             protocal = xpath_data[4].lower()
             protocal = 'https' if 'https' in protocal else 'http'
             self.proxy_list.append({protocal: protocal + '://' + ip_port})
-            # self.proxy_dict.update({protocal: protocal + '://' + ip_port})
         # print(self.proxy_list, len(self.proxy_list))
         return self.proxy_list
 
@@ -521,15 +580,15 @@ class BaseProxy(object):
             protocal = xpath_data[1].lower()
             protocal = 'https' if 'https' in protocal else 'http'
             self.proxy_list.append({protocal: protocal + '://' + ip_port})
-            # self.proxy_dict.update({protocal: protocal + '://' + ip_port})
         # print(self.proxy_list, len(self.proxy_list))
         return self.proxy_list
 
-    def choice_test_site(self, proxy):
-        test_url = random.choice(TEST_PROXY_URLS)
+    def choice_testsite_request(self, proxy):
+        test_url = random.choice(self.test_proxy_urls)
         url = test_url.get('url')
-        url_name = 'test_' + test_url.get('type')
+        url_name = test_url.get('type')
         result = self.request_common_url(url, url_name, proxy)
+
         return result
 
     def get_test_proxy(self, proxy=None):
@@ -538,15 +597,18 @@ class BaseProxy(object):
         :param proxy: 代理，如果为None则自动萱蕚
         :return: 成功返回True,失败范围False
         """
+
         if not proxy:
             proxy = random.choice(self.proxy_list)
 
-        result = self.choice_test_site(proxy)
+        result = self.choice_testsite_request(proxy)
         if result:
             return result  # proxy
-
-        # 递归查找，直到有正常数据返回
-        self.get_test_proxy(proxy)
+        # 如果没有结果，换个测试网站重新测试
+        else:
+            pass
+        # # 递归查找，直到有正常数据返回
+        # self.get_test_proxy(proxy)
 
     @property
     def proxy(self):
@@ -584,73 +646,144 @@ class BaseProxy(object):
         result = self.get_proxy()
         return result
 
-    def test_httpbin(self, html, proxy):
+    def test_baidu(self, etree_html, proxy):
         """
-        httpbin的IP查询
-        :param html: 源网站页面
+        用代理ip测试访问百度网站
+        :param etree_html: etree对象
         :param proxy: 待测试的代理IP
         :return:
         """
-        html = json.loads(html)
-        current_ip = html.get('origin')
+        current_ip = etree_html.xpath('//span[@class="c-gap-right"]/text()')[0].split(':')[1].strip()
+        result = self.compare_proxy(proxy, current_ip)
+
+        if result:
+            return proxy
+        task = []
+        # for item in self.proxy_urls:
+        #     task.append(gevent.spawn(self.request_common_url, url, None, proxy))
+        # gevent.joinall(task)
+
+    def test_sogou(self, etree_html, proxy):
+        """
+        用代理ip测试访问搜狗网站
+        :param etree_html: etree对象
+        :param proxy: 待测试的代理IP
+        :return:
+        """
+
+        current_ip = etree_html.xpath('//div[@id="ipsearchresult"]/strong/text()')[0].split('   ')[0].strip()
+
         result = self.compare_proxy(proxy, current_ip)
         if result:
             return proxy
 
-    def test_chinaz(self, html, proxy):
+    def test_so(self, etree_html, proxy):
+        """
+        用代理ip测试访问360搜索网站
+        :param etree_html: etree对象
+        :param proxy: 待测试的代理IP
+        :return:
+        """
+
+        current_ip = etree_html.xpath('//p[@class="mh-detail "]/span/text()')[0]
+        result = self.compare_proxy(proxy, current_ip)
+        print('.........', result)
+        if result:
+            return proxy
+
+    def test_miji(self, etree_html, proxy):
+        """
+        用代理ip测试访问秘迹网站
+        :param etree_html: etree对象
+        :param proxy: 待测试的代理IP
+        :return:
+        """
+
+        current_ip = etree_html.xpath('//*[@id="main_results"]/div[2]/span/text()')[0]
+        result = self.compare_proxy(proxy, current_ip)
+
+        if result:
+            return proxy
+
+    def test_chinaz(self, etree_html, proxy):
         """
         chinaz的IP查询
-        :param html: 源网站页面
+        :param etree_html: etree对象
         :param proxy: 待测试的代理IP
         :return:
         """
-        html = etree.HTML(html)
-        current_ip = html.xpath('//*[@id="rightinfo"]/dl/dd[1]/text()')[0]
+
+        current_ip = etree_html.xpath('//*[@id="rightinfo"]/dl/dd[1]/text()')[0]
         result = self.compare_proxy(proxy, current_ip)
 
         if result:
             return proxy
 
-    def test_ipip(self, html, proxy):
+    def test_ipip(self, etree_html, proxy):
         """
         ipip的IP查询
-        :param html: 源网站页面
+        :param etree_html: etree对象
         :param proxy: 待测试的代理IP
         :return:
         """
-        html = etree.HTML(html)
-        current_ip = html.xpath('//input/@value')[0]
+
+        current_ip = etree_html.xpath('//input/@value')[0]
         result = self.compare_proxy(proxy, current_ip)
         if result:
             return proxy
 
-    def test_ipcn(self, html, proxy):
+    def test_ipcn(self, etree_html, proxy):
         """
         ipcn的IP查询
-        :param html: 源网站页面
+        :param etree_html: etree对象
         :param proxy: 待测试的代理IP
         :return:
         """
-        html = etree.HTML(html)
-        current_ip = html.xpath('//div[@id="result"]/div/p[1]/code/text()')
-        print(current_ip)
-        time.sleep(10000)
+
+        current_ip = etree_html.xpath('//div[@id="result"]/div/p[1]/code/text()')
         result = self.compare_proxy(proxy, current_ip)
         if result:
             return proxy
 
-    def test_luip(self, html, proxy):
+    def test_luip(self, etree_html, proxy):
         """
         luip的IP查询
-        :param html: 源网站页面
+        :param etree_html: etree对象
         :param proxy: 待测试的代理IP
         :return:
         """
-        html = etree.HTML(html)
-        current_ip = html.xpath('//*[@id="ipaddress"]/text()')[0]
-        print(current_ip)
-        time.sleep(1000)
 
+        current_ip = etree_html.xpath('//*[@id="ipaddress"]/text()')[0]
+        result = self.compare_proxy(proxy, current_ip)
+
+        if result:
+            return proxy
+
+    def test_ttt(self, etree_html, proxy):
+        """
+        ttt的IP查询
+        :param etree_html: etree对象
+        :param proxy: 待测试的代理IP
+        :return:
+        """
+
+        current_ip = etree_html.xpath('//*[@id="getip"]/text()')[0]
+        result = self.compare_proxy(proxy, current_ip)
+        if result:
+            return proxy
+
+    def test_taobao(self, etree_html, proxy):
+        """
+        ttt的IP查询
+        :param etree_html: etree对象
+        :param proxy: 待测试的代理IP
+        :return:
+        """
+
+        current_ip = etree_html.xpath('//*[@id="obviousIp"]/text()')[0]
+        result = self.compare_proxy(proxy, current_ip)
+        if result:
+            return proxy
 
     def test_sohu(self, html, proxy):
         """
@@ -677,28 +810,39 @@ class BaseProxy(object):
         if result:
             return proxy
 
-    def test_ttt(self, html, proxy):
+    def test_ican(self, html, proxy):
         """
-        ttt的IP查询
+        ican的IP查询
+        :param html: 源网站页面,返回的就是ip地址
+        :param proxy: 待测试的代理IP
+        :return:
+        """
+        result = self.compare_proxy(proxy, html)
+        if result:
+            return proxy
+
+    def test_myip(self, html, proxy):
+        """
+        myip的IP查询
         :param html: 源网站页面
         :param proxy: 待测试的代理IP
         :return:
         """
-        html = etree.HTML(html)
-        current_ip = html.xpath('//*[@id="getip"]/text()')[0]
+        # html = html.replace(' ', '').split('：')[1].split('来')[0]
+        current_ip = re.findall(r'\d+\.\d+\.\d+\.\d+', html)[0]
         result = self.compare_proxy(proxy, current_ip)
         if result:
             return proxy
 
-    def test_taobao(self, html, proxy):
+    def test_httpbin(self, html, proxy):
         """
-        ttt的IP查询
-        :param html: 源网站页面
+        httpbin的IP查询
+        :param html: 源网站页面,返回的是json字符串
         :param proxy: 待测试的代理IP
         :return:
         """
-        html = etree.HTML(html)
-        current_ip = html.xpath('//*[@id="obviousIp"]/text()')[0]
+        html = json.loads(html)
+        current_ip = html.get('origin')
         result = self.compare_proxy(proxy, current_ip)
         if result:
             return proxy
@@ -730,6 +874,17 @@ class NormalProxy(BaseProxy):
     pass
 
 
+def save_redis(proxy_list):
+    """
+    存储到redis
+    :param proxy_list: 代理列表
+    :return:
+    """
+    pool = redis.ConnectionPool(max_connections=5, host='127.0.0.1')
+    conn = redis.Redis(connection_pool=pool)
+    conn.set('proxys', proxy_list)
+
+
 class ThreadProxy(BaseProxy):
 
     def request_site(self, proxy_urls):
@@ -739,7 +894,7 @@ class ThreadProxy(BaseProxy):
         """
         url = proxy_urls.get('url')
         url_name = proxy_urls.get('type')
-        self.request_common_url(url, url_name, False)
+        self.request_common_url(url, url_name, None)
 
 
 def proxy_duplicate_removal(lists):
@@ -754,7 +909,7 @@ def proxy_duplicate_removal(lists):
 def main_gevent():
     # 利用协程一般保持在13秒，记得monkey打补丁
     res = NormalProxy()
-    print(len(res.proxys))
+    # print(len(res.proxys))
     proxy_list = res.proxys
     proxy_list = proxy_duplicate_removal(proxy_list)
     # print(proxy_list)
