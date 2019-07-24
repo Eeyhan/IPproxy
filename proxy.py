@@ -34,7 +34,7 @@ class BaseProxy(object):
         self.header = self.get_header  # 请求头
 
         # 节省创建对象的资源
-        self.test_proxy_urls = self.get_test_proxy_site  # 测试代理IP的网址
+        self.test_proxy_urls = self.get_test_site  # 测试代理IP的网址
         self.proxy_urls = self.get_proxy_site  # 免费代理网址
 
     def req_user_agent(self):
@@ -66,7 +66,7 @@ class BaseProxy(object):
         return self.proxy_urls
 
     @property
-    def get_test_proxy_site(self):
+    def get_test_site(self):
         """
         预留的钩子函数，返回的值可以由子类自定制
         :return:
@@ -121,24 +121,28 @@ class BaseProxy(object):
             try:
                 res = requests.get(url, headers=headers, proxies=proxy)
             except Exception as x:
-                print(x)
+                # print(x)
+                pass
             if not res or res.status_code != 200:
-                print('该代理 %s 不可用' % proxy)
-                return False
+                # print('该代理 %s 不可用' % proxy)
+                # res = requests.get(url, headers=self.header, proxies=proxy, timeout=3)
+                return
 
         else:
             try:
                 res = requests.get(url, headers=self.header)
             except Exception as e:
-                print(e)
+                # print(e)
+                pass
             if not res or res.status_code != 200:
-                raise ValueError('错误：网络请求超时，可能请求被拒绝')
-
+                print('错误：网络请求超时，可能请求被拒绝')
+                # res = requests.get(url, headers=self.header, timeout=3)
+                return
         if res:
             try:
                 html = res.content.decode('utf-8')
             except Exception as s:
-                print(s)
+                # print(s)
                 html = res.content.decode('gb2312')
 
         if url_name:
@@ -152,7 +156,6 @@ class BaseProxy(object):
         elif not url_name:
             return res, html
         else:
-
             return
 
         # if not res or res.status_code != 200:
@@ -182,13 +185,12 @@ class BaseProxy(object):
         """
 
         proxy_ip = list(proxy.values())[0].split('//')[1]
-
         if current_ip in proxy_ip:  # current_ip:x.x.x.x proxy_ip:x.x.x.x:xx
+            print(proxy)
             return True
-        else:
-            print('代理不成功。。。')
-            print('current', current_ip, type(current_ip))
-            print('proxy', proxy_ip, type(proxy_ip))
+        # print('current', current_ip, type(current_ip))
+        # print('proxy', proxy_ip, type(proxy_ip))
+        return
 
     def request_site(self, proxy_urls):
         """
@@ -201,6 +203,17 @@ class BaseProxy(object):
             url_name = item.get('type')
             task.append(gevent.spawn(self.request_common_url, url, url_name, None))
         gevent.joinall(task)
+
+    def request_test_site(self, test_urls=None):
+        """
+        获取测试代理IP并测试
+        :param test_urls:
+        :return:
+        """
+        tasks = []
+        for item in self.proxy_list:
+            tasks.append(gevent.spawn(self.choice_testsite_request, item))
+        gevent.joinall(tasks)
 
     def parser(self, html, url_name, proxy=None):
         """
@@ -229,7 +242,8 @@ class BaseProxy(object):
                     else:
                         result = func(html, proxy)
             except Exception as e:
-                print(e)
+                # print(e)
+                pass
             else:
                 return result
         else:
@@ -584,36 +598,41 @@ class BaseProxy(object):
         return self.proxy_list
 
     def choice_testsite_request(self, proxy):
+        """
+        选择测试网站并测试代理是否可用
+        :param proxy: 待测试的代理
+        :return:
+        """
         test_url = random.choice(self.test_proxy_urls)
         url = test_url.get('url')
         url_name = test_url.get('type')
         result = self.request_common_url(url, url_name, proxy)
-
-        return result
+        if not result:
+            self.proxy_list.remove(proxy)
+        return self.proxy_list
 
     def get_test_proxy(self, proxy=None):
         """
         测试代理是否成功
-        :param proxy: 代理，如果为None则自动萱蕚
+        :param proxy: 代理，如果为None则为协程使用，如果不为None则为线程使用
         :return: 成功返回True,失败范围False
         """
-
         if not proxy:
-            proxy = random.choice(self.proxy_list)
-
-        result = self.choice_testsite_request(proxy)
-        if result:
-            return result  # proxy
-        # 如果没有结果，换个测试网站重新测试
+            self.request_test_site()
         else:
-            pass
-        # # 递归查找，直到有正常数据返回
-        # self.get_test_proxy(proxy)
+            result = self.choice_testsite_request(proxy)
+            if result:
+                return result
+            else:  # 如果没有结果，换个测试网站重新测试
+                pass
+            # # 递归查找，直到有正常数据返回
+            # self.get_test_proxy(proxy)
 
     @property
     def proxy(self):
-        result = self.get_test_proxy()
-        return result
+        """测试代理入口方法"""
+        self.get_test_proxy()
+        return self.proxy_list
 
     def proxy_duplicate_removal(self):
         """
@@ -654,14 +673,11 @@ class BaseProxy(object):
         :return:
         """
         current_ip = etree_html.xpath('//span[@class="c-gap-right"]/text()')[0].split(':')[1].strip()
+        current_ip = str(current_ip)
         result = self.compare_proxy(proxy, current_ip)
 
         if result:
             return proxy
-        task = []
-        # for item in self.proxy_urls:
-        #     task.append(gevent.spawn(self.request_common_url, url, None, proxy))
-        # gevent.joinall(task)
 
     def test_sogou(self, etree_html, proxy):
         """
@@ -672,7 +688,7 @@ class BaseProxy(object):
         """
 
         current_ip = etree_html.xpath('//div[@id="ipsearchresult"]/strong/text()')[0].split('   ')[0].strip()
-
+        current_ip = str(current_ip)
         result = self.compare_proxy(proxy, current_ip)
         if result:
             return proxy
@@ -686,8 +702,8 @@ class BaseProxy(object):
         """
 
         current_ip = etree_html.xpath('//p[@class="mh-detail "]/span/text()')[0]
+        current_ip = str(current_ip)
         result = self.compare_proxy(proxy, current_ip)
-        print('.........', result)
         if result:
             return proxy
 
@@ -700,6 +716,7 @@ class BaseProxy(object):
         """
 
         current_ip = etree_html.xpath('//*[@id="main_results"]/div[2]/span/text()')[0]
+        current_ip = str(current_ip)
         result = self.compare_proxy(proxy, current_ip)
 
         if result:
@@ -714,6 +731,7 @@ class BaseProxy(object):
         """
 
         current_ip = etree_html.xpath('//*[@id="rightinfo"]/dl/dd[1]/text()')[0]
+        current_ip = str(current_ip)
         result = self.compare_proxy(proxy, current_ip)
 
         if result:
@@ -728,6 +746,7 @@ class BaseProxy(object):
         """
 
         current_ip = etree_html.xpath('//input/@value')[0]
+        current_ip = str(current_ip)
         result = self.compare_proxy(proxy, current_ip)
         if result:
             return proxy
@@ -741,6 +760,7 @@ class BaseProxy(object):
         """
 
         current_ip = etree_html.xpath('//div[@id="result"]/div/p[1]/code/text()')
+        current_ip = str(current_ip)
         result = self.compare_proxy(proxy, current_ip)
         if result:
             return proxy
@@ -754,6 +774,7 @@ class BaseProxy(object):
         """
 
         current_ip = etree_html.xpath('//*[@id="ipaddress"]/text()')[0]
+        current_ip = str(current_ip)
         result = self.compare_proxy(proxy, current_ip)
 
         if result:
@@ -768,6 +789,7 @@ class BaseProxy(object):
         """
 
         current_ip = etree_html.xpath('//*[@id="getip"]/text()')[0]
+        current_ip = str(current_ip)
         result = self.compare_proxy(proxy, current_ip)
         if result:
             return proxy
@@ -781,6 +803,7 @@ class BaseProxy(object):
         """
 
         current_ip = etree_html.xpath('//*[@id="obviousIp"]/text()')[0]
+        current_ip = str(current_ip)
         result = self.compare_proxy(proxy, current_ip)
         if result:
             return proxy
@@ -849,28 +872,6 @@ class BaseProxy(object):
 
 
 class NormalProxy(BaseProxy):
-    # def get_test_proxy(self, proxy=None):
-    #     """
-    #     测试代理是否成功
-    #     :param proxy: 代理
-    #     :return: 成功返回True,失败范围False
-    #     """
-    #     # url = 'http://httpbin.org/ip'
-    #     url = 'https://www.ipip.net/ip.html'
-    #     # 表示测试爬取的所有结果
-    #     # 待测试的代理
-    #     testing_proxy = []
-    #     tested_proxy = []  # 已测试的代理
-    #     for item in self.proxy_list:
-    #         if 'qq代理' not in item.keys():
-    #             testing_proxy.append(item)
-    #         else:
-    #             tested_proxy.append(item)
-    #     tasks = []
-    #     for proxy in testing_proxy:
-    #         tasks.append(gevent.spawn(self.request_common_url, url, None, proxy))
-    #     gevent.joinall(tasks)
-
     pass
 
 
@@ -907,46 +908,67 @@ def proxy_duplicate_removal(lists):
 
 
 def main_gevent():
-    # 利用协程一般保持在13秒，记得monkey打补丁
+    # 利用协程记得monkey打补丁
+
+    # 爬取部分
     res = NormalProxy()
-    # print(len(res.proxys))
     proxy_list = res.proxys
-    proxy_list = proxy_duplicate_removal(proxy_list)
-    # print(proxy_list)
-    available_proxy = res.proxy
-    return available_proxy
+    # print(proxy_list, len(res.proxys))
+
+    # 测试代理部分
+    available_proxy_list = res.proxy
+    print(available_proxy_list)
+    return available_proxy_list
 
 
 def main_thread_pool():
-    # 利用协程一般保持在8-13秒
+    # 利用线程池要比协程速度快
+
+    # 爬取部分
     res = ThreadProxy()
     thread = ThreadPoolExecutor()
-    tasks = [thread.submit(res.get_proxy, url) for url in PROXY_URLS]
+    tasks1 = [thread.submit(res.get_proxy, url) for url in PROXY_URLS]
     thread.shutdown()
-    temp_data = [obj.result() for obj in as_completed(tasks)]
+    temp_data = [obj.result() for obj in as_completed(tasks1)]
     data = []
     for item in temp_data:
         data.extend(item)
     proxy_list = proxy_duplicate_removal(data)
-    print(proxy_list)
-    print(len(proxy_list))
-    return proxy_list
+    # print(proxy_list)
+    # print(len(proxy_list))
+
+    # 测试代理部分
+    res.proxy_list = proxy_list
+    thread2 = ThreadPoolExecutor()
+    tasks2 = [thread2.submit(res.get_test_proxy, proxy) for proxy in res.proxy_list]
+    thread2.shutdown()
+    temp_data2 = [obj.result() for obj in as_completed(tasks2)]
+    data2 = []
+    for item in temp_data2:
+        data2.extend(item)
+    data2 = proxy_duplicate_removal(data2)
+    print(data2)
+    return data2
 
 
-def main_process_pool():
-    res = ThreadProxy()
-    tasks = []
-    process = ProcessPoolExecutor(max_workers=3)
-    for url in PROXY_URLS:
-        obj = process.submit(res.get_proxy, url).result()
-        tasks.append(obj)
-    process.shutdown()
-    proxy_list = [obj.result() for obj in tasks]
-    print(len(proxy_list))
-    return proxy_list
+# def main_process_pool():
+#     # 此处利用进程不讨巧
+#     res = ThreadProxy()
+#     tasks = []
+#     process = ProcessPoolExecutor(max_workers=3)
+#     for url in PROXY_URLS:
+#         obj = process.submit(res.get_proxy, url).result()
+#         tasks.append(obj)
+#     process.shutdown()
+#     proxy_list = [obj.result() for obj in tasks]
+#     print(len(proxy_list))
+#     return proxy_list
 
 
 def main_thread_pool_asynicio():
+    # 线程池+异步
+
+    # 爬取部分
     res = ThreadProxy()
     loop = asyncio.get_event_loop()
     thread = ThreadPoolExecutor()
@@ -957,20 +979,37 @@ def main_thread_pool_asynicio():
         proxy_list.extend(obj.result())
     # 异步操作会有重复的数据,去重
     proxy_list = proxy_duplicate_removal(proxy_list)
-    print(len(proxy_list))
-    print(proxy_list)
-    return proxy_list
+    # print(len(proxy_list))
+    # print(proxy_list)
+
+    # 测试代理部分
+    res.proxy_list = proxy_list
+    thread2 = ThreadPoolExecutor()
+    loop2 = asyncio.get_event_loop()
+    tasks2 = [loop2.run_in_executor(thread2, res.get_test_proxy, url) for url in res.proxy_list]
+    loop2.run_until_complete(asyncio.wait(tasks2))
+
+    proxy_list2 = []
+    for item in tasks2:
+        proxy_list2.extend(item.result())
+    proxy_list2 = proxy_duplicate_removal(proxy_list2)
+    print(proxy_list2)
+    return proxy_list2
 
 
 if __name__ == '__main__':
     start = time.time()
-    # 第一版，使用协程
-    main_gevent()
+    # 第一种，使用协程，速度稍微慢些，但是占用资源小
+    # main_gevent()
 
-    # 第二版，使用线程池
-    # main_thread_pool()
+    # 第二种，使用线程池，速度最快
+    # res = main_thread_pool()
+    # with open('proxy.txt', 'w', encoding='utf-8') as f:
+    #     f.write(res)
 
-    # 第三版，使用线程池+异步io
-    # main_thread_pool_asynicio()
+    # 第三种，使用线程池+异步io，综合性更强
+    res2 = main_thread_pool_asynicio()
+    with open('proxy.txt', 'w', encoding='utf-8') as f:
+        f.write(res2)
 
     print(time.time() - start)
