@@ -6,7 +6,7 @@
 import gevent
 from gevent import monkey
 
-monkey.patch_all()  # 如果是开启进程池需要把这个注释掉
+monkey.patch_all()  # 如果是要开启进程池需要把这个注释掉
 import abc
 import json
 import re
@@ -111,7 +111,6 @@ class BaseProxy(object):
         :param proxy: 代理参数
         :return:
         """
-        res = None
         html = None
         # 如果有代理
         if proxy:
@@ -119,24 +118,21 @@ class BaseProxy(object):
             headers['Referer'] = url
             headers['Connection'] = 'close'
             try:
-                res = requests.get(url, headers=headers, proxies=proxy)
-            except Exception as x:
-                # print(x)
-                pass
+                res = requests.get(url, headers=headers, proxies=proxy, timeout=(3, 7))
+            except BaseException as x:
+                # print('访问出错' % proxy)
+                return
             if not res or res.status_code != 200:
                 # print('该代理 %s 不可用' % proxy)
-                # res = requests.get(url, headers=self.header, proxies=proxy, timeout=3)
                 return
-
         else:
             try:
-                res = requests.get(url, headers=self.header)
+                res = requests.get(url, headers=self.header, timeout=(3, 7))
             except Exception as e:
                 # print(e)
-                pass
+                return
             if not res or res.status_code != 200:
-                print('错误：网络请求超时，可能请求被拒绝')
-                # res = requests.get(url, headers=self.header, timeout=3)
+                # print('错误：网络请求超时，可能请求被拒绝')
                 return
         if res:
             try:
@@ -918,6 +914,8 @@ def main_gevent():
     # 测试代理部分
     available_proxy_list = res.proxy
     print(available_proxy_list)
+    with open('proxy.txt', 'w+', encoding='utf-8') as f:
+        f.write(str(available_proxy_list))
     return available_proxy_list
 
 
@@ -945,9 +943,13 @@ def main_thread_pool():
     temp_data2 = [obj.result() for obj in as_completed(tasks2)]
     data2 = []
     for item in temp_data2:
-        data2.extend(item)
+        temp_res = item.result()
+        if temp_res:
+            data2.extend(item)
     data2 = proxy_duplicate_removal(data2)
     print(data2)
+    with open('proxy.txt', 'w+', encoding='utf-8') as f:
+        f.write(str(data2))
     return data2
 
 
@@ -984,32 +986,32 @@ def main_thread_pool_asynicio():
 
     # 测试代理部分
     res.proxy_list = proxy_list
-    thread2 = ThreadPoolExecutor()
     loop2 = asyncio.get_event_loop()
+    thread2 = ThreadPoolExecutor()
     tasks2 = [loop2.run_in_executor(thread2, res.get_test_proxy, url) for url in res.proxy_list]
     loop2.run_until_complete(asyncio.wait(tasks2))
 
     proxy_list2 = []
     for item in tasks2:
-        proxy_list2.extend(item.result())
+        temp_res = item.result()
+        if temp_res:
+            proxy_list2.extend(temp_res)
     proxy_list2 = proxy_duplicate_removal(proxy_list2)
     print(proxy_list2)
+    with open('proxy.txt', 'w+', encoding='utf-8') as f:
+        f.write(proxy_list2)
     return proxy_list2
 
 
 if __name__ == '__main__':
     start = time.time()
     # 第一种，使用协程，速度稍微慢些，但是占用资源小
-    # main_gevent()
+    main_gevent()
 
     # 第二种，使用线程池，速度最快
     # res = main_thread_pool()
-    # with open('proxy.txt', 'w', encoding='utf-8') as f:
-    #     f.write(res)
 
     # 第三种，使用线程池+异步io，综合性更强
-    res2 = main_thread_pool_asynicio()
-    with open('proxy.txt', 'w', encoding='utf-8') as f:
-        f.write(res2)
+    # res2 = main_thread_pool_asynicio()
 
     print(time.time() - start)
