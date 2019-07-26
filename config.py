@@ -3,6 +3,9 @@
 # @Author  : Eeyhan
 # @File    : config.py
 
+
+import redis
+
 """
 自添加USER_AGENT请按照已有数据的格式来添加
 """
@@ -97,5 +100,7 @@ TEST_PROXY_URLS = [
     {'url': 'https://tool.lu/ip/', 'type': 'luip'},
     {'url': 'http://api.online-service.vip/ip/me', 'type': 'onlineservice'},
     {'url': 'https://ip.ttt.sh/', 'type': 'ttt'},
-    {'url': 'http://icanhazip.com/', 'type': 'ican'},
+    # {'url': 'http://icanhazip.com/', 'type': 'ican'},  # 该网站有时会返回一个ipv6地址，导致结果有误
 ]
+
+POOL = redis.ConnectionPool(host='127.0.0.1', max_connections=5, decode_responses=True)

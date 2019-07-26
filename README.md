@@ -53,6 +53,18 @@
 
 * 根据文字说明操作即可，分了三个方法，第一个是协程式，第二个是线程池，第三个是线程池+异步
 
+
+## 运行：
+
+* 直接运行proxy.py文件即可，config.py与headers.py请保证和proxy.py同在一目录下
+
+* 爬取部分：
+![爬取](https://raw.githubusercontent.com/Eeyhan/pictures/master/proxy.png)
+
+* redis数据库结果：
+
+![数据库获取](https://raw.githubusercontent.com/Eeyhan/pictures/master/proxy2.png)
+
 ## 自定制：
 
 * 可以自己添加，自己重置UA，设置请求头
@@ -61,6 +73,6 @@
 * BaseProxy类可自定制，可自扩展方法
 * 部分功能还不完善，会尽量做到方便后期更新迭代自定制
 
-## 更多技能点：我的博客
+## 更多技能点：
 
-* [博客](https://www.cnblogs.com/Eeyhan '博客')
+### [我的博客](https://www.cnblogs.com/Eeyhan '博客')

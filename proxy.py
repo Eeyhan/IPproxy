@@ -7,7 +7,6 @@ import gevent
 from gevent import monkey
 
 monkey.patch_all()  # 如果是要开启进程池需要把这个注释掉
-import abc
 import json
 import re
 import asyncio
@@ -16,12 +15,10 @@ from lxml import etree
 from bs4 import BeautifulSoup
 import random
 from functools import reduce
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
-from multiprocessing import Pool
-from config import PROXY_URLS, USER_AGENT, TEST_PROXY_URLS
 import redis
-from requests.exceptions import ConnectionError
+from config import PROXY_URLS, USER_AGENT, TEST_PROXY_URLS, POOL
 
 
 class BaseProxy(object):
@@ -57,7 +54,6 @@ class BaseProxy(object):
         获取代理站点，重新拼接字段
         :return: 返回代理ip地址
         """
-        # proxy_url_list = Queue()
         proxy_url_list = []
         for item in PROXY_URLS:
             item['type'] = 'parser_' + item['type']
@@ -154,24 +150,6 @@ class BaseProxy(object):
         else:
             return
 
-        # if not res or res.status_code != 200:
-        #     raise Exception('错误：网络请求超时，可能请求被拒绝或者代理无效')
-        # try:
-        #     html = res.content.decode('utf-8')
-        # except Exception as e:
-        #     print(e)
-        #     html = res.content.decode('gb2312')
-        # if url_name:
-        #     if url_name.startswith('parser'):
-        #         self.parser(html, url_name)
-        #     elif url_name.startswith('test'):
-        #         result = self.test_parser(html, url_name, proxy)
-        #         return result
-        # elif not url_name:
-        #     return res, html
-        # else:
-        #     return
-
     def compare_proxy(self, proxy, current_ip):
         """
         拆分代理，只要ip:port
@@ -202,8 +180,8 @@ class BaseProxy(object):
 
     def request_test_site(self, test_urls=None):
         """
-        获取测试代理IP并测试
-        :param test_urls:
+        预留的钩子函数，可以重新定义该方法，获取测试代理IP并测试
+        :param test_urls:测试的urls
         :return:
         """
         tasks = []
@@ -244,19 +222,6 @@ class BaseProxy(object):
                 return result
         else:
             raise ValueError('尚不存在该网站的解析方法，请根据配置文件添加对应解析方法')
-
-    # def test_parser(self, html, url_name, proxy):
-    #     """
-    #     测试代理的分发解析器
-    #     :param html: 拿到的网站源码
-    #     :param url_name: 请求的代理网站别名
-    #     :param proxy: 待测试的代理ip
-    #     :return:
-    #     """
-    #     func = getattr(self, url_name)
-    #     if func:
-    #         result = func(html, proxy)
-    #         return result
 
     def parser_xici(self, etree_html):
         """
@@ -508,7 +473,6 @@ class BaseProxy(object):
         for item in protocals:
             xpath_data = item.xpath('string(.)')
             print(xpath_data)
-
         # print(self.proxy_list, len(self.proxy_list))
         return self.proxy_list
 
@@ -613,6 +577,7 @@ class BaseProxy(object):
         :param proxy: 代理，如果为None则为协程使用，如果不为None则为线程使用
         :return: 成功返回True,失败范围False
         """
+
         if not proxy:
             self.request_test_site()
         else:
@@ -653,9 +618,9 @@ class BaseProxy(object):
         return self.proxy_list
 
     @property
-    def proxys(self):
+    def proxies(self):
         """
-        入口方法，返回代理数组
+        入口方法，返回代理IP数组
         :return:
         """
         result = self.get_proxy()
@@ -868,21 +833,27 @@ class BaseProxy(object):
 
 
 class NormalProxy(BaseProxy):
+    """通用类，此类可自扩展"""
     pass
 
 
-def save_redis(proxy_list):
+def save_redis(proxy_list, key=None):
     """
     存储到redis
     :param proxy_list: 代理列表
+    :param key: redis的key
     :return:
     """
-    pool = redis.ConnectionPool(max_connections=5, host='127.0.0.1')
-    conn = redis.Redis(connection_pool=pool)
-    conn.set('proxys', proxy_list)
+    redis.Redis()
+
+    conn = redis.Redis(connection_pool=POOL)
+    if not key:
+        key = 'proxies'
+    conn.set(key, str(proxy_list))
 
 
 class ThreadProxy(BaseProxy):
+    """线程式的类，方便线程调用"""
 
     def request_site(self, proxy_urls):
         """
@@ -908,14 +879,16 @@ def main_gevent():
 
     # 爬取部分
     res = NormalProxy()
-    proxy_list = res.proxys
-    # print(proxy_list, len(res.proxys))
+    proxy_list = res.proxies
+    # print(proxy_list, len(res.proxies))
 
     # 测试代理部分
+    print('开始测试代理IP可用性.........')
     available_proxy_list = res.proxy
-    print(available_proxy_list)
-    with open('proxy.txt', 'w+', encoding='utf-8') as f:
-        f.write(str(available_proxy_list))
+    # print(available_proxy_list)
+    # with open('proxy.txt', 'w+', encoding='utf-8') as f:
+    #     f.write(str(available_proxy_list))
+    save_redis(available_proxy_list)
     return available_proxy_list
 
 
@@ -936,6 +909,7 @@ def main_thread_pool():
     # print(len(proxy_list))
 
     # 测试代理部分
+    print('开始测试代理IP可用性.........')
     res.proxy_list = proxy_list
     thread2 = ThreadPoolExecutor()
     tasks2 = [thread2.submit(res.get_test_proxy, proxy) for proxy in res.proxy_list]
@@ -947,9 +921,12 @@ def main_thread_pool():
         if temp_res:
             data2.extend(item)
     data2 = proxy_duplicate_removal(data2)
-    print(data2)
-    with open('proxy.txt', 'w+', encoding='utf-8') as f:
-        f.write(str(data2))
+    # print(data2)
+    # with open('proxy.txt', 'w+', encoding='utf-8') as f:
+    #     f.write(str(data2))
+
+    # 存储到redis
+    save_redis(data2)
     return data2
 
 
@@ -985,6 +962,7 @@ def main_thread_pool_asynicio():
     # print(proxy_list)
 
     # 测试代理部分
+    print('开始测试代理IP可用性.........')
     res.proxy_list = proxy_list
     loop2 = asyncio.get_event_loop()
     thread2 = ThreadPoolExecutor()
@@ -997,21 +975,26 @@ def main_thread_pool_asynicio():
         if temp_res:
             proxy_list2.extend(temp_res)
     proxy_list2 = proxy_duplicate_removal(proxy_list2)
-    print(proxy_list2)
-    with open('proxy.txt', 'w+', encoding='utf-8') as f:
-        f.write(proxy_list2)
+    # print(proxy_list2)
+    # with open('proxy.txt', 'w+', encoding='utf-8') as f:
+    #     f.write(proxy_list2)
+
+    # 存储到redis
+    save_redis(proxy_list2)
+
     return proxy_list2
 
 
 if __name__ == '__main__':
+    """以下根据自己的使用需求取消注释运行，注意：千万不能三个方法同时运行，会导致数据紊乱"""
+
     start = time.time()
     # 第一种，使用协程，速度稍微慢些，但是占用资源小
-    main_gevent()
+    # main_gevent()
 
     # 第二种，使用线程池，速度最快
     # res = main_thread_pool()
 
-    # 第三种，使用线程池+异步io，综合性更强
-    # res2 = main_thread_pool_asynicio()
-
-    print(time.time() - start)
+    # 第三种，使用线程池+异步io，综合性更强，推荐该方法
+    res2 = main_thread_pool_asynicio()
+    print('总用时:', time.time() - start)
