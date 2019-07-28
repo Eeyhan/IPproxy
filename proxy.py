@@ -648,7 +648,7 @@ class BaseProxy(object):
         :return:
         """
 
-        current_ip = etree_html.xpath('//div[@id="ipsearchresult"]/strong/text()')[0].split('   ')[0].strip()
+        current_ip = etree_html.xpath('//div[@id="ipsearchresult"]/strong/text()')[0].split('   ')[0].strip()
         current_ip = str(current_ip)
         result = self.compare_proxy(proxy, current_ip)
         if result:
@@ -837,21 +837,6 @@ class NormalProxy(BaseProxy):
     pass
 
 
-def save_redis(proxy_list, key=None):
-    """
-    存储到redis
-    :param proxy_list: 代理列表
-    :param key: redis的key
-    :return:
-    """
-    redis.Redis()
-
-    conn = redis.Redis(connection_pool=POOL)
-    if not key:
-        key = 'proxies'
-    conn.set(key, str(proxy_list))
-
-
 class ThreadProxy(BaseProxy):
     """线程式的类，方便线程调用"""
 
@@ -872,6 +857,90 @@ def proxy_duplicate_removal(lists):
     """
     proxy_list = lambda x, y: x if y in x else x + [y]
     return reduce(proxy_list, [[], ] + lists)
+
+
+def save_redis(proxy_list, key=None):
+    """
+    存储到redis
+    :param proxy_list: 代理列表
+    :param key: redis的key
+    :return:
+    """
+    conn = redis.Redis(connection_pool=POOL)
+    if not key:
+        key = 'proxies'
+    conn.set(key, str(proxy_list))
+
+
+def get_redis(key=None):
+    """
+    存储到redis
+    :param key: redis的key
+    :return:
+    """
+    conn = redis.Redis(connection_pool=POOL)
+    if not key:
+        key = 'proxies'
+    proxies = conn.get(key)
+    if proxies:
+        proxies = eval(proxies)
+    proxy_list = db_test_proxy(proxies)
+    return proxy_list
+
+
+def thread_exector(thread, res):
+    """
+    线程池启动
+    :param thread: 线程池对象
+    :param res: 自定义ThreadProxy对象
+    :return:
+    """
+    tasks = [thread.submit(res.get_test_proxy, proxy) for proxy in res.proxy_list]
+    thread.shutdown()
+    tasks = [obj.result() for obj in as_completed(tasks)]
+    return tasks
+
+
+def thread_exector_asynic(thread, res):
+    """
+    线程池异步方法启动
+    :param thread: 线程池对象
+    :param res: 自定义ThreadProxy对象
+    :return:
+    """
+    loop = asyncio.get_event_loop()
+    tasks = [loop.run_in_executor(thread, res.get_test_proxy, url) for url in res.proxy_list]
+    loop.run_until_complete(asyncio.wait(tasks))
+    return tasks
+
+
+def db_test_proxy(proxies):
+    # 测试代理ip
+    res = ThreadProxy()
+    res.proxy_list = proxies
+
+    print('开始测试数据库内代理IP可用性.........')
+    thread = ThreadPoolExecutor()
+    proxy_list = []
+
+    # ################ 以下两个不能共用 ############
+
+    # 线程池方式
+    # tasks = thread_exector(thread, res)
+
+    # # 线程池+异步的方式
+    tasks = thread_exector_asynic(thread, res)
+
+
+    for item in tasks:
+        temp_res = item.result()
+        if temp_res:
+            proxy_list.extend(temp_res)
+
+    proxy_list = proxy_duplicate_removal(proxy_list)
+
+    save_redis(proxy_list)
+    return proxy_list
 
 
 def main_gevent():
@@ -919,8 +988,9 @@ def main_thread_pool():
     for item in temp_data2:
         temp_res = item.result()
         if temp_res:
-            data2.extend(item)
+            data2.extend(temp_res)
     data2 = proxy_duplicate_removal(data2)
+
     # print(data2)
     # with open('proxy.txt', 'w+', encoding='utf-8') as f:
     #     f.write(str(data2))
@@ -987,7 +1057,7 @@ def main_thread_pool_asynicio():
 
 if __name__ == '__main__':
     """以下根据自己的使用需求取消注释运行，注意：千万不能三个方法同时运行，会导致数据紊乱"""
-
+    # ############### 数据库为空时 ###############
     start = time.time()
     # 第一种，使用协程，速度稍微慢些，但是占用资源小
     # main_gevent()
@@ -998,3 +1068,8 @@ if __name__ == '__main__':
     # 第三种，使用线程池+异步io，综合性更强，推荐该方法
     res2 = main_thread_pool_asynicio()
     print('总用时:', time.time() - start)
+
+    # ############### 数据库有值时 ###############
+    #
+    # res = get_redis()
+    # print(res)

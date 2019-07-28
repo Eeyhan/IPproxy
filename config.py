@@ -103,4 +103,4 @@ TEST_PROXY_URLS = [
     # {'url': 'http://icanhazip.com/', 'type': 'ican'},  # 该网站有时会返回一个ipv6地址，导致结果有误
 ]
 
-POOL = redis.ConnectionPool(host='127.0.0.1', max_connections=5, decode_responses=True)
+POOL = redis.ConnectionPool(host='127.0.0.1', max_connections=5, decode_responses=True, db=1)
