@@ -63,10 +63,10 @@
 * 启动main.py文件，用flask将结果以web页面的方式返回代理池，如果希望搭建在服务器上的话则可以此方式启动
 
 
-![web页面启动](https://raw.githubusercontent.com/Eeyhan/pictures/master/flask.png)
-
 #### 注：以web方式返回结果有点慢，因为为了保证返回的结果100%可用性，后台在自动测试代理可用性，如果对速度有要求，可以将相应的测试代码部分注释掉
 
+
+## 运行结果：
 
 ### 数据库内无值时：
 
@@ -88,6 +88,11 @@
 * 将可用的重新再存入数据库：
 
 ![数据库内新的值](https://raw.githubusercontent.com/Eeyhan/pictures/master/proxy4.png)
+
+
+### web方式启动结果：
+
+![web页面启动](https://raw.githubusercontent.com/Eeyhan/pictures/master/flask.png)
 
 
 ## 自定制：
