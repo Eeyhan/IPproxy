@@ -69,7 +69,6 @@ PROXY_URLS = [
     {'url': 'http://www.nimadaili.com/gaoni/', 'type': 'nima'},
     {'url': 'http://www.nimadaili.com/http/', 'type': 'nima'},
     {'url': 'http://www.nimadaili.com/https/', 'type': 'nima'},
-    # {'url': 'https://www.xicidaili.com/qq', 'type': 'xici'}, # qq代理，一般不咋用
     # {'url': 'http://www.data5u.com/', 'type': 'da5u'},    # 待解析
     # {'url': 'http://www.66ip.cn/index.html', 'type': '66ip'}, # 需要js解密，后续补充
     # {'url': 'http://www.xsdaili.com/', 'type': 'xsdaili'}, # 需要爬取二级网页，后续补充

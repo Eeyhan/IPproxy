@@ -15,7 +15,7 @@ from lxml import etree
 from bs4 import BeautifulSoup
 import random
 from functools import reduce
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor, as_completed, wait, FIRST_COMPLETED
 import time
 import redis
 from config import PROXY_URLS, USER_AGENT, TEST_PROXY_URLS, POOL
@@ -880,7 +880,7 @@ def save_redis(proxy_list, key=None):
 
 def get_redis(key=None):
     """
-    存储到redis
+    从redis获取值
     :param key: redis的key
     :return:
     """
@@ -891,6 +891,7 @@ def get_redis(key=None):
     if proxies:
         proxies = eval(proxies)
     proxy_list = db_test_proxy(proxies)
+
     return proxy_list
 
 
@@ -903,8 +904,10 @@ def thread_exector(thread, res):
     """
     tasks = [thread.submit(res.get_test_proxy, proxy) for proxy in res.proxy_list]
     thread.shutdown()
-    tasks = [obj.result() for obj in as_completed(tasks)]
-    return tasks
+    wait(tasks, return_when=FIRST_COMPLETED)
+    # thread2.shutdown()
+    result = [obj for obj in as_completed(tasks)]
+    return result
 
 
 def thread_exector_asynic(thread, res):
@@ -931,12 +934,13 @@ def db_test_proxy(proxies):
 
     # ################ 以下两个不能共用 ############
 
+    # 说明：如果直接运行proxy.py文件，则推荐使用线程池+异步的方式，如果是flask调用，则推荐线程池的方式
+
     # 线程池方式
-    # tasks = thread_exector(thread, res)
+    tasks = thread_exector(thread, res)
 
     # # 线程池+异步的方式
-    tasks = thread_exector_asynic(thread, res)
-
+    # tasks = thread_exector_asynic(thread, res)
 
     for item in tasks:
         temp_res = item.result()
@@ -980,26 +984,21 @@ def main_thread_pool():
     for item in temp_data:
         data.extend(item)
     proxy_list = proxy_duplicate_removal(data)
-    # print(proxy_list)
-    # print(len(proxy_list))
 
     # 测试代理部分
     print('开始测试代理IP可用性.........')
     res.proxy_list = proxy_list
     thread2 = ThreadPoolExecutor()
     tasks2 = [thread2.submit(res.get_test_proxy, proxy) for proxy in res.proxy_list]
-    thread2.shutdown()
-    temp_data2 = [obj.result() for obj in as_completed(tasks2)]
+    wait(tasks2, return_when=FIRST_COMPLETED)
+    # thread2.shutdown()
+    temp_data2 = [obj for obj in as_completed(tasks2)]
     data2 = []
     for item in temp_data2:
         temp_res = item.result()
         if temp_res:
             data2.extend(temp_res)
     data2 = proxy_duplicate_removal(data2)
-
-    # print(data2)
-    # with open('proxy.txt', 'w+', encoding='utf-8') as f:
-    #     f.write(str(data2))
 
     # 存储到redis
     save_redis(data2)
@@ -1034,8 +1033,6 @@ def main_thread_pool_asynicio():
         proxy_list.extend(obj.result())
     # 异步操作会有重复的数据,去重
     proxy_list = proxy_duplicate_removal(proxy_list)
-    # print(len(proxy_list))
-    # print(proxy_list)
 
     # 测试代理部分
     print('开始测试代理IP可用性.........')
@@ -1051,9 +1048,6 @@ def main_thread_pool_asynicio():
         if temp_res:
             proxy_list2.extend(temp_res)
     proxy_list2 = proxy_duplicate_removal(proxy_list2)
-    # print(proxy_list2)
-    # with open('proxy.txt', 'w+', encoding='utf-8') as f:
-    #     f.write(proxy_list2)
 
     # 存储到redis
     save_redis(proxy_list2)
@@ -1069,10 +1063,10 @@ if __name__ == '__main__':
     # main_gevent()
 
     # 第二种，使用线程池，速度最快
-    # res = main_thread_pool()
+    res = main_thread_pool()
 
     # 第三种，使用线程池+异步io，综合性更强，推荐该方法
-    res2 = main_thread_pool_asynicio()
+    # res2 = main_thread_pool_asynicio()
     print('总用时:', time.time() - start)
 
     # ############### 数据库有值时 ###############

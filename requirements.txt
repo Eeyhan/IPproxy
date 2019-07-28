@@ -3,5 +3,4 @@ gevent
 lxml
 redis
 pymysql
-re
-json
+flask
