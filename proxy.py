@@ -19,6 +19,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed, wait, FIRST_COM
 import time
 import redis
 from config import PROXY_URLS, USER_AGENT, TEST_PROXY_URLS, POOL
+import pytesseract
+from PIL import Image
+import os
+from threading import Thread
 
 
 class BaseProxy(object):
@@ -206,8 +210,13 @@ class BaseProxy(object):
                     html = BeautifulSoup(html, "lxml")
                     result = func(html)
                 # 此类用字符串处理或者用正则匹配
-                elif url_name in ('test_sohu', 'test_onlineservice', 'test_ican', 'test_myip', 'test_httpbin'):
-                    result = func(html, proxy)
+                elif url_name in (
+                        'test_sohu', 'test_onlineservice', 'test_ican', 'test_myip', 'test_httpbin', 'parser_github'):
+                    # result = func(html, proxy)
+                    if not proxy:
+                        result = func(html)
+                    else:
+                        result = func(html, proxy)
                 # 其余用xpath解析
                 else:
                     html = etree.HTML(html)
@@ -372,9 +381,9 @@ class BaseProxy(object):
         # print(self.proxy_list)
         return self.proxy_list
 
-    def get_goubanjia_port(self, port_word):
+    def decrypt_port(self, port_word):
         """
-        解密goubanjia真实端口号
+        解密被加密的真实端口号，该字段放在标签的属性里
         :param port_word: 加密字段
         :return:
         """
@@ -383,9 +392,7 @@ class BaseProxy(object):
         for item in word:
             num = 'ABCDEFGHIZ'.find(item)
             num_list.append(str(num))
-        # print(int("".join(num_list)))
         port = int("".join(num_list)) >> 0x3
-        # print(port)
         return port
 
     def parser_goubanjia(self, html):
@@ -416,7 +423,7 @@ class BaseProxy(object):
                     elif 'class' in child.attrs.keys():
                         class_list = child.attrs['class']
                         if 'port' in class_list:
-                            port = self.get_goubanjia_port(class_list[1])
+                            port = self.decrypt_port(class_list[1])
                             # 拼接端口
                             text = text + ":" + str(port)
                     else:
@@ -427,6 +434,34 @@ class BaseProxy(object):
         for item in data:
             self.proxy_list.append({item[0]: item[0] + '://' + item[1]})
         # print(proxy_list)
+        return self.proxy_list
+
+    def parser_da5u(self, html):
+        """
+        da5u代理解析
+        :param html:
+        :return:
+        """
+
+        ports = html.xpath('//li[contains(@class,"port")]')
+        port_list = []
+        for port in ports:
+            encryption_port = port.values()[0].split(' ')[1]
+            port = self.decrypt_port(encryption_port)
+            port_list.append(port)
+
+        items = html.xpath('//ul[@class="l2"]')
+        temp_data = []
+        for item in items:
+            xpath_data = item.xpath('./span/li/text()')
+            ip = xpath_data[0]
+            protocal = xpath_data[3]
+            temp_data.append([ip, protocal])
+
+        res = zip(temp_data, port_list)
+        for item in res:
+            proxy = {item[0][1]: item[0][1] + '://' + item[0][0] + ':' + str(item[1])}
+            self.proxy_list.append(proxy)
         return self.proxy_list
 
     def parser_feiyi(self, html):
@@ -465,16 +500,56 @@ class BaseProxy(object):
         :param html: etree对象
         :return:
         """
-        ip_ports = html.xpath('//td[@class="tbl-proxy-ip"]')
-        protocals = html.xpath('//td[@class="tbl-proxy-type"]')
-        for item in ip_ports:
+        response_ip = html.xpath('//td[@class="tbl-proxy-ip"]')
+        response_protocal = html.xpath('//td[@class="tbl-proxy-type"]')
+        ips = []
+        protocals = []
+        for item in response_ip:
             xpath_data = item.xpath('string(.)')
-            print(xpath_data)
-        for item in protocals:
-            xpath_data = item.xpath('string(.)')
-            print(xpath_data)
+            ips.append(xpath_data)
+        for item in response_protocal:
+            xpath_data = item.xpath('string(.)').lower()
+            temp_protocal = 'https' if 'https' in xpath_data else 'http'
+            protocals.append(temp_protocal)
+
+        # 这里考虑再三，不能用并发提速，因为并发会乱序，导致ip和端口无法对应
+
+        response_port = html.xpath('//td[@class="tbl-proxy-port"]')
+        url_start = 'https://proxy.mimvp.com/'
+        ports = []
+        for item in response_port:
+            port_img = url_start + item.xpath('./img/@src')[0]
+            headers = self.header
+            data = requests.get(port_img, headers=headers).content
+            port = self.ocr_get_port(data)
+            ports.append(port)
+
+        result = zip(protocals, ips, ports)
+        for item in result:
+            self.proxy_list.append({item[0]: item[0] + '://' + item[1] + ':' + item[2]})
+
         # print(self.proxy_list, len(self.proxy_list))
         return self.proxy_list
+
+    def ocr_get_port(self, data):
+        """
+        用ocr提取图片中的端口
+        :param data: 返回的图片二进制流结果
+        :return:
+        """
+
+        f = open('port.png', 'wb')
+        f.write(data)
+        f.close()
+
+        pytesseract.pytesseract.tesseract_cmd = 'C://Program Files//Tesseract-OCR//tesseract.exe'
+        port = pytesseract.image_to_string(Image.open('port.png'),
+                                           config='--psm 10 --oem 3 -c tessedit_char_whitelist=0123456789')
+
+        # 删除图片
+        os.remove('port.png')
+
+        return port
 
     def parser_kaixin(self, html):
         """
@@ -556,6 +631,61 @@ class BaseProxy(object):
             self.proxy_list.append({protocal: protocal + '://' + ip_port})
         # print(self.proxy_list, len(self.proxy_list))
         return self.proxy_list
+
+    def parser_github(self, html):
+        """
+        解析github上的数据
+        :param html:
+        :return:
+        """
+        proxies = html.split('\n')
+        for item in proxies:
+            res = json.loads(item)
+            port = res.get('port')
+            ip = res.get('host')
+            protocal = res.get('type')
+            proxy = {protocal: protocal + '://' + ip + ':' + str(port)}
+            self.proxy_list.append(proxy)
+
+    def parser_xsdaili(self, html):
+        """
+        小舒代理网站解析
+        :param html:
+        :return:
+        """
+        # 爬取每天的最新的
+        res = html.xpath('//div[contains(@class,"ips")][position()<3]')
+        url_start = 'http://www.xsdaili.com'
+
+        for item in res:
+            second_url = url_start + item.xpath('./div[@class="title"]/a/@href')[0]
+            result = self.get_xsdaili_result(second_url)
+            self.proxy_list.append(result)
+
+        return self.proxy_list
+
+    def get_xsdaili_result(self, url):
+        """
+        小舒代理二层网页爬取
+        :param url:
+        :return:
+        """
+        headers = self.header
+        response = requests.get(url, headers=headers).content
+        try:
+            content = response.decode('utf-8')
+        except Exception as e:
+            # print(e)
+            content = response.decode('gb2312')
+        etree_html = etree.HTML(content)
+        items = etree_html.xpath('//div[@class="cont"]/text()')[:-1]
+        proxies = []
+        for item in items:
+            ip_port, protocal = item.strip().split('@')
+            protocal = protocal.split('#')[0].lower()
+            proxy = {protocal: protocal + '://' + ip_port}
+            proxies.append(proxy)
+        return proxies
 
     def choice_testsite_request(self, proxy):
         """
@@ -948,7 +1078,7 @@ def db_test_proxy(proxies):
             proxy_list.extend(temp_res)
 
     proxy_list = proxy_duplicate_removal(proxy_list)
-
+    print('一共有%s个可用的代理' % len(proxy_list))
     save_redis(proxy_list)
     return proxy_list
 
@@ -964,9 +1094,6 @@ def main_gevent():
     # 测试代理部分
     print('开始测试代理IP可用性.........')
     available_proxy_list = res.proxy
-    # print(available_proxy_list)
-    # with open('proxy.txt', 'w+', encoding='utf-8') as f:
-    #     f.write(str(available_proxy_list))
     save_redis(available_proxy_list)
     return available_proxy_list
 
@@ -1001,6 +1128,7 @@ def main_thread_pool():
     data2 = proxy_duplicate_removal(data2)
 
     # 存储到redis
+    print('一共爬取了%s个可用的代理' % len(proxy_list))
     save_redis(data2)
     return data2
 
@@ -1050,6 +1178,7 @@ def main_thread_pool_asynicio():
     proxy_list2 = proxy_duplicate_removal(proxy_list2)
 
     # 存储到redis
+    print('一共爬取了%s个可用的代理' % len(proxy_list))
     save_redis(proxy_list2)
 
     return proxy_list2
@@ -1058,16 +1187,16 @@ def main_thread_pool_asynicio():
 if __name__ == '__main__':
     """以下根据自己的使用需求取消注释运行，注意：千万不能三个方法同时运行，会导致数据紊乱"""
     # ############### 数据库为空时 ###############
-    start = time.time()
+    # start = time.time()
     # 第一种，使用协程，速度稍微慢些，但是占用资源小
     # main_gevent()
 
     # 第二种，使用线程池，速度最快
-    res = main_thread_pool()
+    # res = main_thread_pool()
 
     # 第三种，使用线程池+异步io，综合性更强，推荐该方法
-    # res2 = main_thread_pool_asynicio()
-    print('总用时:', time.time() - start)
+    res2 = main_thread_pool_asynicio()
+    # print('总用时:', time.time() - start)
 
     # ############### 数据库有值时 ###############
     #

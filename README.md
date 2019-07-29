@@ -10,13 +10,20 @@
 * 抓取各大代理网站的免费代理，组成一个代理池，已自动附带UA(user-agent)代理池
 
 
+## 更新进度：
+
+### 2019/7/29更新
+
+* 增加更多的代理网站，以提高可用代理量
+
+* 利用tessertact-ocr提取技术，把图片中的文字提取出来
+
 ## 计划待更新的功能：
 
 * 部分待优化完善
 
 * requests库爬取数据时，还是无法解决访问请求时的阻塞情况，后期考虑使用aiohttp代替reqeuests
 
-* 对一些还未做解析的爬虫网站进行解析
 
 
 ## 开发环境
@@ -29,7 +36,7 @@
 * json
 * ThreadPoolExecutor
 * flask
-
+* pytesseract
 
 * 安装必须的库
 
@@ -55,6 +62,8 @@
 ### 终端方式运行：
 
 * 在运行之前自行安装配置redis数据库
+
+* 在运行之前自行安装配置tesseract引擎
 
 * 直接按proxy.py文件选择不同方法，取消注释运行proxy.py文件即可，config.py与headers.py请保证和proxy.py同在一目录下
 

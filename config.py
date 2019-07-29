@@ -69,10 +69,12 @@ PROXY_URLS = [
     {'url': 'http://www.nimadaili.com/gaoni/', 'type': 'nima'},
     {'url': 'http://www.nimadaili.com/http/', 'type': 'nima'},
     {'url': 'http://www.nimadaili.com/https/', 'type': 'nima'},
-    # {'url': 'http://www.data5u.com/', 'type': 'da5u'},    # 待解析
+    {'url': 'http://www.data5u.com/', 'type': 'da5u'},
+    {'url': 'https://raw.githubusercontent.com/fate0/proxylist/master/proxy.list', 'type': 'github'},
+    {'url': 'https://proxy.mimvp.com/freeopen.php', 'type': 'mipu'},  # 需要图片识别端口，后续补充
+    {'url': 'http://www.xsdaili.com/', 'type': 'xsdaili'},  # 需要爬取二级网页，后续补充
+
     # {'url': 'http://www.66ip.cn/index.html', 'type': '66ip'}, # 需要js解密，后续补充
-    # {'url': 'http://www.xsdaili.com/', 'type': 'xsdaili'}, # 需要爬取二级网页，后续补充
-    # {'url': 'https://proxy.mimvp.com/freeopen.php', 'type': 'mipu'},  # 需要图片识别端口，后续补充
 
 ]
 
@@ -102,4 +104,5 @@ TEST_PROXY_URLS = [
     # {'url': 'http://icanhazip.com/', 'type': 'ican'},  # 该网站有时会返回一个ipv6地址，导致结果有误
 ]
 
+# redis数据库连接池
 POOL = redis.ConnectionPool(host='127.0.0.1', max_connections=5, decode_responses=True, db=1)
