@@ -18,11 +18,11 @@ from functools import reduce
 from concurrent.futures import ThreadPoolExecutor, as_completed, wait, FIRST_COMPLETED
 import time
 import redis
-from config import PROXY_URLS, USER_AGENT, TEST_PROXY_URLS, POOL
 import pytesseract
 from PIL import Image
 import os
-from threading import Thread
+import js2py
+from config import PROXY_URLS, USER_AGENT, TEST_PROXY_URLS, POOL
 
 
 class BaseProxy(object):
@@ -32,6 +32,7 @@ class BaseProxy(object):
         self.header = None
         self.proxy_list = []  # 代理IP列表
         self.user_agent = USER_AGENT  # 请求的UA
+        self.user_agent_66ip = random.choice(USER_AGENT)  # 66ip代理使用
         self.header = self.get_header  # 请求头
 
         # 节省创建对象的资源
@@ -112,8 +113,7 @@ class BaseProxy(object):
         :return:
         """
         html = None
-        # 如果有代理
-        if proxy:
+        if proxy:  # 如果有代理
             headers = self.header
             headers['Referer'] = url
             headers['Connection'] = 'close'
@@ -125,13 +125,25 @@ class BaseProxy(object):
             if not res or res.status_code != 200:
                 # print('该代理 %s 不可用' % proxy)
                 return
-        else:
+        else:  # 不是测试代理
             try:
-                res = requests.get(url, headers=self.header, timeout=(3, 7))
+                if '66ip' in url:
+                    headers = self.header
+                    headers['User-Agent'] = self.user_agent_66ip
+                    res = requests.get(url, headers=headers, timeout=(3, 7))
+                else:
+                    res = requests.get(url, headers=self.header, timeout=(3, 7))
             except Exception as e:
                 # print(e)
                 return
-            if not res or res.status_code != 200:
+            if res.status_code != 200:
+                # 如果是解析的66ip网站
+                if url_name and url_name == 'parser_66ip':
+                    res = self.solve_66ip(res)
+                else:
+                    # print('错误：网络请求超时，可能请求被拒绝')
+                    pass
+            if not res:
                 # print('错误：网络请求超时，可能请求被拒绝')
                 return
         if res:
@@ -142,7 +154,6 @@ class BaseProxy(object):
                 html = res.content.decode('gb2312')
 
         if url_name:
-            # result = self.parser(html, url_name, proxy)
             if url_name.startswith('parser'):
                 result = self.parser(html, url_name)
             elif url_name.startswith('test'):
@@ -153,6 +164,39 @@ class BaseProxy(object):
             return res, html
         else:
             return
+
+    def solve_66ip(self, response):
+        """
+        处理66ip的js加密
+        :param response: 第一次请求返回的js数据
+        :return: 返回解密好的网页数据
+        """
+        cookie = response.headers["Set-Cookie"]
+        js = response.text.encode("utf8").decode("utf8")
+        js = js.replace("<script>", "").replace("</script>", "").replace("{eval(", "{var data1 = (").replace(chr(0),
+                                                                                                             chr(32))
+        # 使用js2py处理js
+        context = js2py.EvalJs()
+        context.execute(js)
+        js_temp = context.data1
+        index1 = js_temp.find("document.")
+        index2 = js_temp.find("};if((")
+        js_temp = js_temp[index1:index2].replace("document.cookie", "data2")
+        try:
+            context.execute(js_temp)
+        except Exception as e:
+            # time.sleep(2)
+            # context.execute(js_temp)
+            pass
+        data = context.data2
+
+        # 合并cookie，重新请求网站。
+        cookie += ";" + data
+        response = requests.get("http://www.66ip.cn/mo.php?tqsl=1024", headers={
+            "User-Agent": self.user_agent_66ip,
+            "cookie": cookie,
+        })
+        return response
 
     def compare_proxy(self, proxy, current_ip):
         """
@@ -206,7 +250,7 @@ class BaseProxy(object):
         if func:
             # 如果是goubanjia，用BeautifulSoup解析
             try:
-                if url_name == 'parser_goubanjia':
+                if url_name in ('parser_goubanjia', 'parser_66ip'):
                     html = BeautifulSoup(html, "lxml")
                     result = func(html)
                 # 此类用字符串处理或者用正则匹配
@@ -687,6 +731,19 @@ class BaseProxy(object):
             proxies.append(proxy)
         return proxies
 
+    def parser_66ip(self, html):
+        """
+        解析66ip的代理
+        :param html: beautifulsoup对象
+        :return:
+        """
+        res = html.find('p').stripped_strings
+        for item in res:
+            if '$' in item or '}' in item:
+                continue
+            self.proxy_list.append({'http': 'http://' + item})
+        return self.proxy_list
+
     def choice_testsite_request(self, proxy):
         """
         选择测试网站并测试代理是否可用
@@ -963,7 +1020,7 @@ class BaseProxy(object):
 
 
 class NormalProxy(BaseProxy):
-    """通用类，此类可自扩展"""
+    """通用类，如果要扩展功能，可以在此扩展"""
     pass
 
 
@@ -1021,7 +1078,7 @@ def get_redis(key=None):
     if proxies:
         proxies = eval(proxies)
     proxy_list = db_test_proxy(proxies)
-
+    print('数据库内还有 %s 个代理可用' % len(proxy_list))
     return proxy_list
 
 
@@ -1185,9 +1242,9 @@ def main_thread_pool_asynicio():
 
 
 if __name__ == '__main__':
-    """以下根据自己的使用需求取消注释运行，注意：千万不能三个方法同时运行，会导致数据紊乱"""
     # ############### 数据库为空时 ###############
-    # start = time.time()
+    """以下根据自己的使用需求取消注释运行，注意：千万不能三个方法同时运行，会导致数据紊乱"""
+    start = time.time()
     # 第一种，使用协程，速度稍微慢些，但是占用资源小
     # main_gevent()
 
@@ -1196,9 +1253,10 @@ if __name__ == '__main__':
 
     # 第三种，使用线程池+异步io，综合性更强，推荐该方法
     res2 = main_thread_pool_asynicio()
-    # print('总用时:', time.time() - start)
+    print('总用时:', time.time() - start)
 
+    """数据库有值和数据库无值时不能混合使用，容易导致数据紊乱，且当数据库无值存储时已做过代理验证"""
     # ############### 数据库有值时 ###############
-    #
+
     # res = get_redis()
     # print(res)

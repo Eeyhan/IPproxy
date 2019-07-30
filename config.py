@@ -71,10 +71,10 @@ PROXY_URLS = [
     {'url': 'http://www.nimadaili.com/https/', 'type': 'nima'},
     {'url': 'http://www.data5u.com/', 'type': 'da5u'},
     {'url': 'https://raw.githubusercontent.com/fate0/proxylist/master/proxy.list', 'type': 'github'},
-    {'url': 'https://proxy.mimvp.com/freeopen.php', 'type': 'mipu'},  # 需要图片识别端口，后续补充
-    {'url': 'http://www.xsdaili.com/', 'type': 'xsdaili'},  # 需要爬取二级网页，后续补充
+    {'url': 'https://proxy.mimvp.com/freeopen.php', 'type': 'mipu'},  # 需要图片识别端口，已解决
+    {'url': 'http://www.xsdaili.com/', 'type': 'xsdaili'},  # 需要爬取二级网页，已解决
+    {'url': 'http://www.66ip.cn/mo.php?tqsl=1024', 'type': '66ip'},  # 需要js解密，已解决
 
-    # {'url': 'http://www.66ip.cn/index.html', 'type': '66ip'}, # 需要js解密，后续补充
 
 ]
 

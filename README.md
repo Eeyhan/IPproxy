@@ -1,6 +1,6 @@
 # IPproxy
 
-* 利用Python以及各种库完成一个代理IP池，自动测试代理可用性，将数据持久化存储
+* 利用Python的requests/re/beautifulsoup/tesseract等模块，完成的一个代理IP池，自动测试代理可用性，将数据持久化存储
 
 
 ## 基本说明
@@ -11,6 +11,11 @@
 
 
 ## 更新进度：
+
+### 2019/7/30更新
+
+* 破解66ip代理网站的加密字段，较之前能达到120个以上的可用代理
+
 
 ### 2019/7/29更新
 
@@ -59,15 +64,19 @@
 
 ## 运行：
 
+* 因为爬取的代理网站众多，测试代理可用性也需要些时间，初次爬取代理时所耗时间平均在5-6分钟，后续取数据阶段则会很快
+
 ### 终端方式运行：
 
 * 在运行之前自行安装配置redis数据库
 
 * 在运行之前自行安装配置tesseract引擎
 
-* 直接按proxy.py文件选择不同方法，取消注释运行proxy.py文件即可，config.py与headers.py请保证和proxy.py同在一目录下
+* 直接按proxy.py文件选择不同方法，取消相关的注释并运行proxy.py文件即可，config.py与headers.py请保证和proxy.py同在一目录下
 
 ### web方式运行：
+
+* web方式运行调取的是从redis数据库中取出的数据，如果redis没有数据则先爬取数据再以web方式运行
 
 * 启动main.py文件，用flask将结果以web页面的方式返回代理池，如果希望搭建在服务器上的话则可以此方式启动
 
@@ -81,11 +90,12 @@
 
 * 爬取部分：
 
-![爬取](https://raw.githubusercontent.com/Eeyhan/pictures/master/proxy.png)
+![爬取](https://raw.githubusercontent.com/Eeyhan/pictures/master/proxy5.png)
+
 
 * redis数据库结果：
 
-![数据库获取](https://raw.githubusercontent.com/Eeyhan/pictures/master/proxy2.png)
+![数据库获取](https://raw.githubusercontent.com/Eeyhan/pictures/master/redis.png)
 
 
 ### 数据库内有值时：
@@ -110,7 +120,7 @@
 
 * 支持自己添加需要爬取的代理IP，config.py文件里有说明，自添加爬取的代理IP之后，需要自定制对应的方法，自己设置解析网站和测试代理IP的方法
 
-* 支持BaseProxy类自定制，自扩展方法
+* 支持NormalProxy类自定制，自扩展方法
 
 
 ## 更多技能点：
