@@ -20,8 +20,12 @@ import time
 import redis
 import pytesseract
 from PIL import Image
-import os
 import js2py
+
+import os
+import sys
+
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from config import PROXY_URLS, USER_AGENT, TEST_PROXY_URLS, POOL
 
 
@@ -208,7 +212,7 @@ class BaseProxy(object):
 
         proxy_ip = list(proxy.values())[0].split('//')[1]
         if current_ip in proxy_ip:  # current_ip:x.x.x.x proxy_ip:x.x.x.x:xx
-            # print(proxy)
+            print(proxy)
             return True
         # print('current', current_ip, type(current_ip))
         # print('proxy', proxy_ip, type(proxy_ip))
@@ -1074,6 +1078,7 @@ def save_redis(proxy_list, key=None):
         cont = eval(cont)
         proxy_list.extend(cont)
     proxy_list = proxy_duplicate_removal(proxy_list)
+    print('数据库内还有 %s 个代理可用' % len(proxy_list))
     conn.set(key, str(proxy_list))
 
 
@@ -1090,7 +1095,6 @@ def get_redis(key=None):
     if proxies:
         proxies = eval(proxies)
         proxy_list = db_test_proxy(proxies)
-        print('数据库内还有 %s 个代理可用' % len(proxy_list))
         return proxy_list
     else:
         print('数据库内无可用代理，请重新爬取')
@@ -1104,9 +1108,8 @@ def thread_exector(thread, res):
     :return:
     """
     tasks = [thread.submit(res.get_test_proxy, proxy) for proxy in res.proxy_list]
+    # wait(tasks, return_when=FIRST_COMPLETED)
     thread.shutdown()
-    wait(tasks, return_when=FIRST_COMPLETED)
-    # thread2.shutdown()
     result = [obj for obj in as_completed(tasks)]
     return result
 
@@ -1146,16 +1149,15 @@ def db_test_proxy(proxies):
     for item in tasks:
         temp_res = item.result()
         if temp_res:
-            proxy_list.extend(temp_res)
+            if temp_res not in proxy_list:
+                proxy_list.extend(temp_res)
 
-    # 这里调用proxy_duplicate_removal有点小问题，直接去重
     new_proxy_list = []
     for item in proxy_list:
         if item not in new_proxy_list:
             new_proxy_list.append(item)
     save_redis(new_proxy_list)
-    print('一共有%s个可用的代理' % len(new_proxy_list))
-    return proxy_list
+    return new_proxy_list
 
 
 def main_gevent():
@@ -1270,11 +1272,11 @@ if __name__ == '__main__':
     # res = main_thread_pool()
 
     # 第三种，使用线程池+异步io，综合性更强，推荐该方法
-    res2 = main_thread_pool_asynicio()
-    print('总用时:', time.time() - start)
+    # res2 = main_thread_pool_asynicio()
+    # print('总用时:', time.time() - start)
 
     """数据库有值和数据库无值时不能混合使用，容易导致数据紊乱，且当数据库无值存储时已做过代理验证"""
     # ############### 数据库有值时 ###############
 
-    # res = get_redis()
+    res = get_redis()
     # print(res)
