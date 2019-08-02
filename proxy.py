@@ -1148,9 +1148,13 @@ def db_test_proxy(proxies):
         if temp_res:
             proxy_list.extend(temp_res)
 
-    proxy_list = proxy_duplicate_removal(proxy_list)
-    print('一共有%s个可用的代理' % len(proxy_list))
-    save_redis(proxy_list)
+    # 这里调用proxy_duplicate_removal有点小问题，直接去重
+    new_proxy_list = []
+    for item in proxy_list:
+        if item not in new_proxy_list:
+            new_proxy_list.append(item)
+    save_redis(new_proxy_list)
+    print('一共有%s个可用的代理' % len(new_proxy_list))
     return proxy_list
 
 
