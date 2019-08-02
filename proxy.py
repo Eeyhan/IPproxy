@@ -194,8 +194,8 @@ class BaseProxy(object):
         cookie += ";" + data
         response = requests.get("http://www.66ip.cn/mo.php?tqsl=1024", headers={
             "User-Agent": self.user_agent_66ip,
-            "cookie": cookie,
-        })
+            "cookie": cookie
+        }, timeout=(3, 7))
         return response
 
     def compare_proxy(self, proxy, current_ip):
@@ -208,7 +208,7 @@ class BaseProxy(object):
 
         proxy_ip = list(proxy.values())[0].split('//')[1]
         if current_ip in proxy_ip:  # current_ip:x.x.x.x proxy_ip:x.x.x.x:xx
-            print(proxy)
+            # print(proxy)
             return True
         # print('current', current_ip, type(current_ip))
         # print('proxy', proxy_ip, type(proxy_ip))
@@ -562,9 +562,9 @@ class BaseProxy(object):
         url_start = 'https://proxy.mimvp.com/'
         ports = []
         for item in response_port:
-            port_img = url_start + item.xpath('./img/@src')[0]
+            port_img_url = url_start + item.xpath('./img/@src')[0]
             headers = self.header
-            data = requests.get(port_img, headers=headers).content
+            data = requests.get(port_img_url, headers=headers, timeout=(3, 7)).content
             port = self.ocr_get_port(data)
             ports.append(port)
 
@@ -715,7 +715,7 @@ class BaseProxy(object):
         :return:
         """
         headers = self.header
-        response = requests.get(url, headers=headers).content
+        response = requests.get(url, headers=headers, timeout=(3, 7)).content
         try:
             content = response.decode('utf-8')
         except Exception as e:
@@ -787,8 +787,14 @@ class BaseProxy(object):
         对爬取到的数据去重
         :return:
         """
-        proxy_list = lambda x, y: x if y in x else x + [y]
-        self.proxy_list = reduce(proxy_list, [[], ] + self.proxy_list)
+        # proxy_list = lambda x, y: x if y in x else x + [y]
+        # self.proxy_list = reduce(proxy_list, [[], ] + self.proxy_list)
+        # return self.proxy_list
+        new_proxy_list = []
+        for item in self.proxy_list:
+            if item not in new_proxy_list:
+                new_proxy_list.append(item)
+        self.proxy_list = new_proxy_list
         return self.proxy_list
 
     def get_proxy(self, url=None):
@@ -1042,8 +1048,13 @@ def proxy_duplicate_removal(lists):
     对爬取到的数据去重
     :return:
     """
-    proxy_list = lambda x, y: x if y in x else x + [y]
-    return reduce(proxy_list, [[], ] + lists)
+    # proxy_list = lambda x, y: x if y in x else x + [y]
+    # return reduce(proxy_list, [[], ] + lists)
+    new_proxy_list = []
+    for item in lists:
+        if item not in new_proxy_list:
+            new_proxy_list.append(item)
+    return new_proxy_list
 
 
 def save_redis(proxy_list, key=None):
@@ -1062,6 +1073,7 @@ def save_redis(proxy_list, key=None):
     if cont:
         cont = eval(cont)
         proxy_list.extend(cont)
+    proxy_list = proxy_duplicate_removal(proxy_list)
     conn.set(key, str(proxy_list))
 
 
@@ -1077,9 +1089,11 @@ def get_redis(key=None):
     proxies = conn.get(key)
     if proxies:
         proxies = eval(proxies)
-    proxy_list = db_test_proxy(proxies)
-    print('数据库内还有 %s 个代理可用' % len(proxy_list))
-    return proxy_list
+        proxy_list = db_test_proxy(proxies)
+        print('数据库内还有 %s 个代理可用' % len(proxy_list))
+        return proxy_list
+    else:
+        print('数据库内无可用代理，请重新爬取')
 
 
 def thread_exector(thread, res):
