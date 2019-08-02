@@ -1272,11 +1272,11 @@ if __name__ == '__main__':
     # res = main_thread_pool()
 
     # 第三种，使用线程池+异步io，综合性更强，推荐该方法
-    # res2 = main_thread_pool_asynicio()
-    # print('总用时:', time.time() - start)
+    res2 = main_thread_pool_asynicio()
+    print('总用时:', time.time() - start)
 
     """数据库有值和数据库无值时不能混合使用，容易导致数据紊乱，且当数据库无值存储时已做过代理验证"""
     # ############### 数据库有值时 ###############
 
-    res = get_redis()
+    # res = get_redis()
     # print(res)
