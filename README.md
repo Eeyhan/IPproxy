@@ -10,7 +10,7 @@
 * 抓取各大代理网站的免费代理，组成一个代理池，已自动附带UA(user-agent)代理池
 
 * 程序流程图
-	+ ![程序流程](http://naotu.baidu.com/file/b754a429094727b85240df587d005a3c?token=fd57d469e8309269)
+	+ [程序流程](http://naotu.baidu.com/file/b754a429094727b85240df587d005a3c?token=fd57d469e8309269)
 
 ## 更新进度：
 
