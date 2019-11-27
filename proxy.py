@@ -28,6 +28,9 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from config import PROXY_URLS, USER_AGENT, TEST_PROXY_URLS, POOL
 
+requests.packages.urllib3.disable_warnings()
+requests.adapters.DEFAULT_RETRIES = 5
+
 
 class BaseProxy(object):
     """获取代理IP"""
@@ -122,7 +125,7 @@ class BaseProxy(object):
             headers['Referer'] = url
             headers['Connection'] = 'close'
             try:
-                res = requests.get(url, headers=headers, proxies=proxy, timeout=(3, 7))
+                res = requests.get(url, headers=headers, proxies=proxy, timeout=(3, 7), verify=False)
             except BaseException as x:
                 # print('访问出错' % proxy)
                 return
@@ -134,9 +137,9 @@ class BaseProxy(object):
                 if '66ip' in url:
                     headers = self.header
                     headers['User-Agent'] = self.user_agent_66ip
-                    res = requests.get(url, headers=headers, timeout=(3, 7))
+                    res = requests.get(url, headers=headers, timeout=(3, 7), verify=False)
                 else:
-                    res = requests.get(url, headers=self.header, timeout=(3, 7))
+                    res = requests.get(url, headers=self.header, timeout=(3, 7), verify=False)
             except Exception as e:
                 # print(e)
                 return
@@ -150,7 +153,7 @@ class BaseProxy(object):
             if not res:
                 # print('错误：网络请求超时，可能请求被拒绝')
                 return
-        if res:
+        if res and res.status_code == 200:
             try:
                 html = res.content.decode('utf-8')
             except Exception as s:
@@ -188,9 +191,9 @@ class BaseProxy(object):
         js_temp = context.data1
         index1 = js_temp.find("document.")
         index2 = js_temp.find("};if((")
-        print('11', js_temp[index1:index2])
+        # print('11', js_temp[index1:index2])
         js_temp = js_temp[index1:index2].replace("document.cookie", "data2")
-        print('22', js_temp)
+        # print('22', js_temp)
         try:
             context.execute(js_temp)
         except Exception as e:
@@ -295,7 +298,6 @@ class BaseProxy(object):
         res = etree_html.xpath('//table/tr[position()>1]')
         for item in res:
             xpath_data = item.xpath('./td/text()')
-            # print(xpath_data)
             ip = xpath_data[0]
             port = xpath_data[1]
             ip_port = ip + ':' + port
@@ -533,21 +535,6 @@ class BaseProxy(object):
         # print(self.proxy_list)
         return self.proxy_list
 
-    def parser_shenji(self, html):
-        """
-        神鸡代理解析
-        :param html: etree对象
-        :return:
-        """
-        res = html.xpath('//table/tr[position()>1]')
-        for item in res:
-            xpath_data = item.xpath('./td/text()')
-            ip_port = xpath_data[0]
-            protocal = xpath_data[3].lower()
-            self.proxy_list.append({protocal: protocal + '://' + ip_port})
-        # print(self.proxy_list, len(self.proxy_list))
-        return self.proxy_list
-
     def parser_mipu(self, html):
         """
         米扑代理解析 该方法未完善，后续补充
@@ -574,7 +561,7 @@ class BaseProxy(object):
         for item in response_port:
             port_img_url = url_start + item.xpath('./img/@src')[0]
             headers = self.header
-            data = requests.get(port_img_url, headers=headers, timeout=(3, 7)).content
+            data = requests.get(port_img_url, headers=headers, timeout=(3, 7), verify=False).content
             port = self.ocr_get_port(data)
             ports.append(port)
 
@@ -611,7 +598,7 @@ class BaseProxy(object):
         :param html: etree对象
         :return:
         """
-        res = html.xpath('//*[@id="nav_btn01"]/div[6]/table/tbody/tr')
+        res = html.xpath('//div[@class="hot-product-content"]/table/tbody/tr')
         for item in res:
             xpath_data = item.xpath('./td/text()')
             ip_port = xpath_data[0] + ':' + xpath_data[1]
@@ -637,6 +624,43 @@ class BaseProxy(object):
         return self.proxy_list
 
     def parser_jxl(self, html):
+        """
+        jxl代理网站解析
+        :param html:
+        :return:
+        """
+        # 爬取每天的最新的
+        res = html.xpath('//div[@class="contar-wrap"]/div[@class="item"]')
+        for item in res:
+            second_url = item.xpath('./div/h3/a/@href')[0]
+            result = self.get_jxl_result(second_url)
+            self.proxy_list.append(result)
+        return self.proxy_list
+
+    def get_jxl_result(self, url):
+        """
+        jxl代理二层网页爬取
+        :param url:
+        :return:
+        """
+        headers = self.header
+        response = requests.get(url, headers=headers, timeout=(3, 7), verify=False).content
+        try:
+            content = response.decode('utf-8')
+        except Exception as e:
+            # print(e)
+            content = response.decode('gb2312')
+        etree_html = etree.HTML(content)
+        items = etree_html.xpath('//div[contains(@class,"item-box")]/p/text()')
+        proxies = []
+        for item in items:
+            ip_port, protocal = item.strip().split('@')
+            protocal = protocal.split('#')[0].lower()
+            proxy = {protocal: protocal + '://' + ip_port}
+            proxies.append(proxy)
+        return proxies
+
+    def parser_jxl_old(self, html):
         """
         jxl代理解析
         :param html: etree对象
@@ -725,7 +749,7 @@ class BaseProxy(object):
         :return:
         """
         headers = self.header
-        response = requests.get(url, headers=headers, timeout=(3, 7)).content
+        response = requests.get(url, headers=headers, timeout=(3, 7), verify=False).content
         try:
             content = response.decode('utf-8')
         except Exception as e:
@@ -752,6 +776,37 @@ class BaseProxy(object):
             if '$' in item or '}' in item:
                 continue
             self.proxy_list.append({'http': 'http://' + item})
+        return self.proxy_list
+
+    def parser_sff(self, html):
+        """
+        解析seofangfang的代理
+        :param html: etree对象
+        :return:
+        """
+        res = html.xpath('//div[@class="table-responsive"]/table/tbody/tr')
+        for item in res:
+            ip = item.xpath('./td[1]/text()')
+            ip = ip[0] if ip else ''
+            port = item.xpath('./td[2]/text()')
+            port = port[0] if port else ''
+            if ip and port:
+                item = ip + ':' + port
+                self.proxy_list.append({'http': 'http://' + item})
+        # print(self.proxy_list)
+        return self.proxy_list
+
+    def parser_ashtwo(self, html):
+        """
+        解析ashtwo的代理
+        :param html: etree对象
+        :return:
+        """
+        ip_port = html.xpath('//p/text()')
+        ip_port = ip_port[0] if ip_port else ''
+        if ip_port:
+            self.proxy_list.append({'http': 'http://' + ip_port})
+        # print(self.proxy_list)
         return self.proxy_list
 
     def choice_testsite_request(self, proxy):
@@ -1049,7 +1104,6 @@ def proxy_duplicate_removal(lists):
                 new_proxy_list.extend(item)
             else:
                 new_proxy_list.append(item)
-
     new_proxy_list = [list(proxy.values())[0] for proxy in new_proxy_list]
     new_proxy_list = set(new_proxy_list)
     new_proxy_list_2 = []
@@ -1106,9 +1160,30 @@ def get_redis(key=None):
     if proxies:
         proxies = eval(proxies)
         proxies = proxy_duplicate_removal(proxies)
-        proxies = db_test_proxy(proxies)  # 在正式的爬取阶段如果想节省时间，可以把此行测试代理步骤注释掉
+        return proxies
+    else:
+        print('数据库内无可用代理，请重新爬取')
+
+
+def get_redis_test(key=None):
+    """
+    从redis获取值
+    :param key: redis的key
+    :return:
+    """
+    conn = redis.Redis(connection_pool=POOL)
+    if not key:
+        key = 'proxies'
+    proxies = conn.get(key)
+    if proxies:
+        proxies = eval(proxies)
+        proxies = proxy_duplicate_removal(proxies)
+        # 在正式的爬取阶段如果想节省时间，可以把此段测试代理步骤注释掉
+        # #######
+        proxies = db_test_proxy(proxies)
         proxies = proxy_duplicate_removal(proxies)
         cover_redis(proxies)
+        # #######
         return proxies
     else:
         print('数据库内无可用代理，请重新爬取')
@@ -1255,14 +1330,12 @@ def main_thread_pool_asynicio():
     thread2 = ThreadPoolExecutor()
     tasks2 = [loop2.run_in_executor(thread2, res.get_test_proxy, url) for url in res.proxy_list]
     loop2.run_until_complete(asyncio.wait(tasks2))
-
     proxy_list2 = []
     for item in tasks2:
         temp_res = item.result()
         if temp_res:
             proxy_list2.extend(temp_res)
     proxy_list2 = proxy_duplicate_removal(proxy_list2)
-
     # 存储到redis
     print('一共爬取了%s个可用的代理' % len(proxy_list))
     save_redis(proxy_list2)
@@ -1287,5 +1360,5 @@ if __name__ == '__main__':
     """数据库有值和数据库无值时不能混合使用，容易导致数据紊乱，且当数据库无值存储时已做过代理验证"""
     # ############### 数据库有值时 ###############
 
-    # res = get_redis()
+    res = get_redis_test()
     # # print(res)

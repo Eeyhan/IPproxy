@@ -3,8 +3,13 @@
 # @Author  : Eeyhan
 # @File    : config.py
 
-
+import os
+import sys
+import logging
 import redis
+
+# 项目根目录
+BASE_DIR = os.path.dirname(__file__)
 
 """
 自添加USER_AGENT请按照已有数据的格式来添加
@@ -37,7 +42,7 @@ USER_AGENT = [
 ]
 
 """
-自添加PROXY_URLS请按照已有数据的格式来添加
+代理网站：自添加PROXY_URLS请按照已有数据的格式来添加
 """
 
 PROXY_URLS = [
@@ -55,16 +60,13 @@ PROXY_URLS = [
     {'url': 'http://www.89ip.cn/', 'type': '89ip'},
     {'url': 'http://www.qydaili.com/free/', 'type': 'qydaili'},
     {'url': 'https://ip.ihuan.me/', 'type': 'ihuan'},
-    {'url': 'http://www.ip3366.net/', 'type': '3366'},
-    {'url': 'http://www.iphai.com/free/ng', 'type': 'iphai'},
-    {'url': 'http://www.iphai.com/free/wg', 'type': 'iphai'},
-    {'url': 'http://www.iphai.com/free/wp', 'type': 'iphai'},
+    {'url': 'http://www.ip3366.net/free/?stype=1', 'type': '3366'},
+    {'url': 'http://www.ip3366.net/free/?stype=2', 'type': '3366'},
     {'url': 'http://www.goubanjia.com/', 'type': 'goubanjia'},
     {'url': 'http://www.feiyiproxy.com/?page_id=1457', 'type': 'feiyi'},
-    {'url': 'http://www.shenjidaili.com/open/', 'type': 'shenji'},
-    {'url': 'http://ip.kxdaili.com/dailiip.html', 'type': 'kaixin'},
+    {'url': 'http://www.kxdaili.com/dailiip.html', 'type': 'kaixin'},
+    {'url': 'http://www.kxdaili.com/dailiip/2/1.html', 'type': 'kaixin'},
     {'url': 'http://www.superfastip.com/welcome/freeIP', 'type': 'jisu'},
-    {'url': 'http://ip.jiangxianli.com/', 'type': 'jxl'},
     {'url': 'https://lab.crossincode.com/proxy/', 'type': 'cross'},
     {'url': 'http://www.nimadaili.com/gaoni/', 'type': 'nima'},
     {'url': 'http://www.nimadaili.com/http/', 'type': 'nima'},
@@ -73,13 +75,15 @@ PROXY_URLS = [
     {'url': 'https://raw.githubusercontent.com/fate0/proxylist/master/proxy.list', 'type': 'github'},
     {'url': 'https://proxy.mimvp.com/freeopen.php', 'type': 'mipu'},  # 需要图片识别端口，已解决
     {'url': 'http://www.xsdaili.com/', 'type': 'xsdaili'},  # 需要爬取二级网页，已解决
-    {'url': 'http://www.66ip.cn/mo.php?tqsl=1024', 'type': '66ip'},  # 需要js解密，已解决
-
+    {'url': 'https://ip.jiangxianli.com/blog.html', 'type': 'jxl'},  # 需要爬取二级网页，已解决
+    {'url': 'http://www.66ip.cn/mo.php?tqsl=2048', 'type': '66ip'},  # 需要js解密，已解决
+    {'url': 'https://proxy.seofangfa.com/', 'type': 'sff'},
+    {'url': 'http://p.ashtwo.cn/', 'type': 'ashtwo'},     # 一次只能返回一个结果，不过有胜于无
 
 ]
 
 """
-自添加测试代理的url请按照已有数据的格式来添加
+测试代理网站：自添加测试代理的url请按照已有数据的格式来添加
 """
 
 TEST_PROXY_URLS = [
@@ -105,4 +109,7 @@ TEST_PROXY_URLS = [
 ]
 
 # redis数据库连接池
-POOL = redis.ConnectionPool(host='127.0.0.1', max_connections=5, decode_responses=True, db=1)
+'可以自行设置为其他的数据库'
+POOL = redis.ConnectionPool(host='127.0.0.1', max_connections=80, decode_responses=True, db=1)
+POOL2 = redis.ConnectionPool(host='127.0.0.1', max_connections=80, decode_responses=True, db=2)
+POOL3 = redis.ConnectionPool(host='127.0.0.1', max_connections=80, decode_responses=True, db=3)
