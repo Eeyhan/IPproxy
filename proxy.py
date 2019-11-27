@@ -158,7 +158,10 @@ class BaseProxy(object):
                 html = res.content.decode('utf-8')
             except Exception as s:
                 # print(s)
-                html = res.content.decode('gb2312')
+                try:
+                    html = res.content.decode('gb2312')
+                except Exception:
+                    html = res.text
 
         if url_name:
             if url_name.startswith('parser'):
@@ -263,17 +266,23 @@ class BaseProxy(object):
         if func:
             # 如果是goubanjia，用BeautifulSoup解析
             try:
-                if url_name in ('parser_goubanjia', 'parser_66ip'):
+                if url_name in {'parser_goubanjia', 'parser_66ip'}:
                     html = BeautifulSoup(html, "lxml")
                     result = func(html)
                 # 此类用字符串处理或者用正则匹配
-                elif url_name in (
-                        'test_sohu', 'test_onlineservice', 'test_ican', 'test_myip', 'test_httpbin', 'parser_github'):
+                elif url_name in {'test_sohu', 'test_onlineservice', 'test_ican', 'test_myip', 'test_httpbin',
+                                  'parser_github'}:
                     # result = func(html, proxy)
                     if not proxy:
                         result = func(html)
                     else:
                         result = func(html, proxy)
+                elif url_name == 'parser_cool':
+                    html = json.loads(html)
+                    result = func(html)
+
+                elif url_name in {'parser_proxyl', 'parser_proxyls'}:
+                    result = func(html)
                 # 其余用xpath解析
                 else:
                     html = etree.HTML(html)
@@ -660,22 +669,6 @@ class BaseProxy(object):
             proxies.append(proxy)
         return proxies
 
-    def parser_jxl_old(self, html):
-        """
-        jxl代理解析
-        :param html: etree对象
-        :return:
-        """
-        res = html.xpath('//table/tbody/tr')
-        # print(len(res))
-        for item in res:
-            xpath_data = item.xpath('./td/text()')
-            ip_port = xpath_data[1] + ':' + xpath_data[2]
-            protocal = xpath_data[4].lower()
-            self.proxy_list.append({protocal: protocal + '://' + ip_port})
-        # print(self.proxy_list, len(self.proxy_list))
-        return self.proxy_list
-
     def parser_cross(self, html):
         """
         cross代理解析
@@ -806,6 +799,65 @@ class BaseProxy(object):
         ip_port = ip_port[0] if ip_port else ''
         if ip_port:
             self.proxy_list.append({'http': 'http://' + ip_port})
+        # print(self.proxy_list)
+        return self.proxy_list
+
+    def parser_cool(self, html):
+        """
+        解析cool代理
+        :param html: etree对象
+        :return:
+        """
+        if html:
+            for item in html:
+                if item:
+                    ip = item.get("ip")
+                    port = item.get("port")
+                    if ip and port:
+                        ip_port = ip + ':' + str(port)
+                        self.proxy_list.append({'http': 'http://' + ip_port})
+            # print(self.proxy_list)
+            return self.proxy_list
+
+    def parser_proxyl(self, html):
+        """
+        解析proxylist代理
+        :param html: etree对象
+        :return:
+        """
+        res = html.split('\r\n')
+        for item in res:
+            self.proxy_list.append({'http': 'http://' + item})
+        # print(self.proxy_list)
+        return self.proxy_list
+
+    def parser_proxyls(self, html):
+        """
+        解析proxylist的https代理
+        :param html: etree对象
+        :return:
+        """
+        res = html.split('\r\n')
+        for item in res:
+            self.proxy_list.append({'https': 'https://' + item})
+        # print(self.proxy_list)
+        return self.proxy_list
+
+    def parser_mrhin(self, html):
+        """
+        解析mrhin的https代理
+        :param html: etree对象
+        :return:
+        """
+        res = html.xpath('//table[@cellpadding="3"]/tr[position()>2]')
+        for item in res:
+            ip = item.xpath('./td[1]/text()')
+            ip = ip[0] if ip else ''
+            port = item.xpath('./td[2]/text()')
+            port = port[0] if port else ''
+            if ip and port:
+                ip_port = ip + ':' + str(port)
+                self.proxy_list.append({'http': 'http://' + ip_port})
         # print(self.proxy_list)
         return self.proxy_list
 
@@ -1360,5 +1412,5 @@ if __name__ == '__main__':
     """数据库有值和数据库无值时不能混合使用，容易导致数据紊乱，且当数据库无值存储时已做过代理验证"""
     # ############### 数据库有值时 ###############
 
-    res = get_redis_test()
+    # res = get_redis_test()
     # # print(res)

@@ -79,6 +79,10 @@ PROXY_URLS = [
     {'url': 'http://www.66ip.cn/mo.php?tqsl=2048', 'type': '66ip'},  # 需要js解密，已解决
     {'url': 'https://proxy.seofangfa.com/', 'type': 'sff'},
     {'url': 'http://p.ashtwo.cn/', 'type': 'ashtwo'},     # 一次只能返回一个结果，不过有胜于无
+    {'url': 'http://cool-proxy.net/proxies.json', 'type': 'cool'},
+    {'url': 'http://www.proxylists.net/http_highanon.txt', 'type': 'proxyl'},
+    {'url': 'http://www.proxylists.net/https_highanon.txt', 'type': 'proxyls'},
+    {'url': 'http://www.mrhinkydink.com/proxies.htm', 'type': 'mrhin'},
 
 ]
 
