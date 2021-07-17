@@ -1,6 +1,6 @@
 # IPproxy
 
-* 利用Python的requests/re/beautifulsoup/tesseract等模块实现的代理IP池，自动测试代理可用性，并作数据持久化存储
+* 利用Python的aiohttp/re/beautifulsoup/tesseract等模块实现的代理IP池，自动测试代理可用性，并作数据持久化存储
 
 
 ## 基本说明
